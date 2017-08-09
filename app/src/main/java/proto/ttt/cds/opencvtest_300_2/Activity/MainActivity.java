@@ -1,10 +1,12 @@
-package proto.ttt.cds.opencvtest_300_2.Activities;
+package proto.ttt.cds.opencvtest_300_2.Activity;
 
-import android.content.ContentValues;
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.Configuration;
-import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Point;
+import android.graphics.Rect;
 import android.hardware.Camera;
 import android.os.Build;
 import android.os.Handler;
@@ -14,7 +16,9 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.Display;
 import android.view.SurfaceView;
+import android.view.View;
 import android.view.WindowManager;
+import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -34,7 +38,9 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import proto.ttt.cds.opencvtest_300_2.Classes.PlantDBHelper;
+import proto.ttt.cds.opencvtest_300_2.Background.Periodic.MyAlarmReceiver;
+import proto.ttt.cds.opencvtest_300_2.Background.Periodic.PlantWatcherService;
+import proto.ttt.cds.opencvtest_300_2.Database.PlantDBHandler;
 import proto.ttt.cds.opencvtest_300_2.R;
 
 public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2  {
@@ -45,6 +51,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     public static final int SECOND_MAX_CONTOUR = 1;
 
     public static final String TAG = "cdsTest";
+
     public static final int PLANTS_NUM = 3;
 //    public static final int CAMERA_NUM = PLANTS_NUM;
     public static final int CAMERA_NUM = 1;
@@ -53,6 +60,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     private TextView mText_Infos[] = new TextView[PLANTS_NUM];
     private TextView[] mDividerViews = new TextView[PLANTS_NUM + 1];
     private JavaCameraView[] mJavaCameraViewArr;
+    private Button mBtn_startService, mBtn_stopService, mBtn_delData;
     private BaseLoaderCallback mLoaderCallback;
     private Mat mRGB, mImageGray, mImageCanny, mTempMat;
     final H mH = new H();
@@ -60,7 +68,12 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     private int mDisplayHeight, mDisplayWidth;
     private int mCurrentOrientation;
 
-    private PlantDBHelper mDBHelper;
+    private PlantDBHandler mDBHelper;
+
+    private Intent mServiceIntent;
+    private PendingIntent mPendingServiceIntent;
+
+    private boolean mUpdateIntents = true;
 
     static {
         if (OpenCVLoader.initDebug()) {
@@ -70,6 +83,9 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         }
     }
 
+    public MainActivity() {
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -77,7 +93,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         if (CAMERA_NUM > Camera.getNumberOfCameras()) {
             Toast.makeText(this, "Declared number of cameras not supported in current system environment"
                     , Toast.LENGTH_LONG);
-            onDestroy();
+            finish();
         }
 
         updateConfigForOrientationChange();
@@ -87,30 +103,12 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
             setContentView(R.layout.activity_main_land);
         }
 
-        mJavaCameraViewArr = new JavaCameraView[CAMERA_NUM];
-        int visibleCamIdx = -1;
-        for(int i = 0 ; i < mJavaCameraViewArr.length; i++) {
-            int resId = getResources().getIdentifier("javaCameraView_" + (i+1), "id", getPackageName());
-            mJavaCameraViewArr[i] = (JavaCameraView) findViewById(resId);
-//            if (visibleCamIdx == -1) {
-//                visibleCamIdx = i;
-                mJavaCameraViewArr[i].setVisibility(SurfaceView.VISIBLE);
-//            mJavaCameraViewArr[i].setVisibility(SurfaceView.INVISIBLE);
-//            } else {
-//                mJavaCameraViewArr[i].setVisibility(SurfaceView.INVISIBLE);
-//            }
-            mJavaCameraViewArr[i].setCvCameraViewListener(this);
-        }
+        initViews();
 
-        for(int i = 0 ; i < mText_Infos.length; i++) {
-            int resId = getResources().getIdentifier("txt_largest_area_" + (i+1), "id", getPackageName());
-            mText_Infos[i] = (TextView) findViewById(resId);
-        }
-
-        for (int i = 0; i < mDividerViews.length; i++) {
-            int resId = getResources().getIdentifier("divider_" + (i+1), "id", getPackageName());
-            mDividerViews[i] = (TextView) findViewById(resId);
-        }
+        PlantWatcherService.resetPlantNames(this);
+        PlantWatcherService.savePlantName(this, "canary", 0);
+        PlantWatcherService.savePlantName(this, "rose", 1);
+        PlantWatcherService.savePlantName(this, "lettuce", 2);
 
         mLoaderCallback = new BaseLoaderCallback(this) {
             @Override
@@ -130,11 +128,96 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
             }
         };
 
-
         // instantiate DB
-        mDBHelper = new PlantDBHelper(getApplicationContext());
+        mDBHelper = new PlantDBHandler(getApplicationContext());
     }
 
+    private void initWatchPlantServiceIntents(int numOfContours, Rect[] areas) {
+        if (!mUpdateIntents) {
+            return;
+        }
+        mUpdateIntents = false;
+        mServiceIntent = new Intent(getApplicationContext(), MyAlarmReceiver.class);
+        mServiceIntent.setAction(MyAlarmReceiver.ACTION_WATCH_PLANT_SERVICE);
+        Bundle bundle = new Bundle();
+        bundle.putInt("numberOfContours", numOfContours);
+        bundle.putParcelableArray("observeAreas", areas);
+        mServiceIntent.putExtras(bundle);
+        mPendingServiceIntent = PendingIntent.getBroadcast(this, MyAlarmReceiver.REQUEST_CODE,
+                mServiceIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+    }
+
+    private void initViews() {
+        mJavaCameraViewArr = new JavaCameraView[CAMERA_NUM];
+        int visibleCamIdx = -1;
+        for(int i = 0 ; i < mJavaCameraViewArr.length; i++) {
+            int resId = getResources().getIdentifier("javaCameraView_" + (i+1), "id", getPackageName());
+            mJavaCameraViewArr[i] = (JavaCameraView) findViewById(resId);
+//            if (visibleCamIdx == -1) {
+//                visibleCamIdx = i;
+            mJavaCameraViewArr[i].setVisibility(SurfaceView.VISIBLE);
+//            mJavaCameraViewArr[i].setVisibility(SurfaceView.INVISIBLE);
+//            } else {
+//                mJavaCameraViewArr[i].setVisibility(SurfaceView.INVISIBLE);
+//            }
+            mJavaCameraViewArr[i].setCvCameraViewListener(this);
+        }
+
+        for(int i = 0 ; i < mText_Infos.length; i++) {
+            int resId = getResources().getIdentifier("txt_largest_area_" + (i+1), "id", getPackageName());
+            mText_Infos[i] = (TextView) findViewById(resId);
+        }
+
+        for (int i = 0; i < mDividerViews.length; i++) {
+            int resId = getResources().getIdentifier("divider_" + (i+1), "id", getPackageName());
+            mDividerViews[i] = (TextView) findViewById(resId);
+        }
+
+        mBtn_startService = (Button) findViewById(R.id.btn_start_service);
+        if (mBtn_startService != null) {
+            mBtn_startService.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    //schedule service then destroy activity
+                    scheduleAlarm();
+                    finish();
+                }
+            });
+        }
+
+        mBtn_stopService = (Button) findViewById(R.id.btn_stop_service);
+        if (mBtn_stopService != null) {
+            mBtn_stopService.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    stopScheduleAlarm();
+                    Toast.makeText(getApplicationContext(), "Alarm service stopped", Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+
+        mBtn_delData = (Button) findViewById(R.id.btn_delete_data);
+        if (mBtn_delData != null) {
+            mBtn_delData.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    mDBHelper.deleteData();
+                    Toast.makeText(getApplicationContext(), "Data deleted", Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+    }
+
+    private void scheduleAlarm() {
+        long firstMillis = System.currentTimeMillis();
+        AlarmManager alarmManager = (AlarmManager) this.getSystemService(Context.ALARM_SERVICE);
+        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, firstMillis, 1000 * 60 * 3, mPendingServiceIntent);
+    }
+
+    private void stopScheduleAlarm() {
+        AlarmManager am = (AlarmManager) this.getSystemService(Context.ALARM_SERVICE);
+        am.cancel(mPendingServiceIntent);
+    }
 
     @Override
     protected void onPause() {
@@ -187,14 +270,14 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         mTempMat = new Mat(height, width, CvType.CV_8UC1);
 
         float cameraOffSet= (mDisplayWidth - width) / 2;
-        float oneThirdWidth = width / 3;
+        float subAreaWidth = width / 3;
 
-        mSectorDividersPos = new float[]{cameraOffSet, cameraOffSet + oneThirdWidth,
-                cameraOffSet + (oneThirdWidth * 2), cameraOffSet + width}; //TODO: set values in terms of landscape orientation for now
+        mSectorDividersPos = new float[]{cameraOffSet, cameraOffSet + subAreaWidth,
+                cameraOffSet + (subAreaWidth * 2), cameraOffSet + width}; //TODO: set values in terms of landscape orientation for now
 
         for(int i = 0; i < mText_Infos.length; i++) {
             if (mText_Infos[i] != null) {
-                mText_Infos[i].setWidth((int) oneThirdWidth);
+                mText_Infos[i].setWidth((int) subAreaWidth);
             }
         }
 
@@ -227,11 +310,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         masked.copyTo(preview);
 
         List<MatOfPoint> contourPoints = new ArrayList<MatOfPoint>();
-//        Mat heirarchy = new Mat();
-//        Imgproc.findContours(masked, contourPoints, heirarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
-
-        double[] maxArea = new double[]{0, 0, 0};
-        double[] secondMaxArea = new double[]{0, 0, 0};
 
         // creates an array to store the biggest, and the second biggest contour
         double[][] maxAreaArr = new double[][]{{0, 0, 0}, {0, 0, 0}};
@@ -239,11 +317,15 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
         int matRows = masked.rows();
         int matCols = masked.cols();
+        initWatchPlantServiceIntents(2, new Rect[]{/*new Rect(0, 0, matCols, matRows)
+                , */new Rect(0, 0, matCols/3, matRows)
+                , new Rect(0, 0, matCols/3*2, matRows)
+                , new Rect(0, 0, matCols, matRows)});
         for (int i = 0; i < PLANTS_NUM; i++) {
             contourPoints.clear();
             if (mCurrentOrientation == Configuration.ORIENTATION_LANDSCAPE) {
                 int area_leftX = (matCols / 3) * i;
-                int area_RightX = (matCols / 3) * (i +  1);
+                int area_RightX = (matCols / 3) * (i + 1);
 
                 Imgproc.findContours(masked.submat(0, matRows, area_leftX, area_RightX),
                         contourPoints, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
@@ -313,7 +395,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                         + "\nPlant 2 = " + (int)(maxAreaArr[SECOND_MAX_CONTOUR][2] / 100)};
         setText(strArr);
 
-
         return preview;
     }
 
@@ -345,11 +426,9 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     final class H extends Handler {
         public static final int SET_TEXT = 0;
         public static final int SET_DIVIDER_AND_INFO_POS = 1;
-        public static final int SAVE_DB = 2;
 
         @Override
         public void handleMessage(Message msg) {
-
             switch (msg.what) {
                 case SET_TEXT:
                     String[] str = (String[]) msg.obj;
@@ -361,7 +440,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                         }
                     }
                     break;
-
                 case SET_DIVIDER_AND_INFO_POS:
                     for (int i = 0; i < mDividerViews.length; i++) {
                         if (mDividerViews[i] != null) {
@@ -373,22 +451,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                         }
                     }
                     break;
-
-                case SAVE_DB:
-
-                    break;
             }
         }
     }
 
-    private void saveToDB(String name, String subTitle, int area) {
-        SQLiteDatabase db = mDBHelper.getWritableDatabase();
-
-        ContentValues values = new ContentValues();
-        values.put(PlantDBHelper.FeedEntry.COLUMN_NAME_TITLE, name);
-        values.put(PlantDBHelper.FeedEntry.COLUMN_NAME_SUBTITLE, subTitle);
-        values.put(PlantDBHelper.FeedEntry.COLUMN_AREA_SIZE, area);
-
-        long newRowId = db.insert(PlantDBHelper.FeedEntry.TABLE_NAME, null, values);
-    }
 }
