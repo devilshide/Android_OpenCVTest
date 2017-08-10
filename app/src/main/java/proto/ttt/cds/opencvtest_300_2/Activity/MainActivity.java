@@ -70,8 +70,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
     private PlantDBHandler mDBHelper;
 
-    private Intent mServiceIntent;
-    private PendingIntent mPendingServiceIntent;
+    private PendingIntent mAlarmManagerIntent;
 
     private boolean mUpdateIntents = true;
 
@@ -132,19 +131,16 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         mDBHelper = new PlantDBHandler(getApplicationContext());
     }
 
-    private void initWatchPlantServiceIntents(int numOfContours, Rect[] areas) {
-        if (!mUpdateIntents) {
-            return;
-        }
-        mUpdateIntents = false;
-        mServiceIntent = new Intent(getApplicationContext(), MyAlarmReceiver.class);
-        mServiceIntent.setAction(MyAlarmReceiver.ACTION_WATCH_PLANT_SERVICE);
+    public static PendingIntent getWatchPlantServiceIntent(Context context, int numOfContours
+            , Rect[] areas) {
+        Intent intent = new Intent(context, MyAlarmReceiver.class);
+        intent.setAction(MyAlarmReceiver.ACTION_WATCH_PLANT_SERVICE);
         Bundle bundle = new Bundle();
         bundle.putInt("numberOfContours", numOfContours);
         bundle.putParcelableArray("observeAreas", areas);
-        mServiceIntent.putExtras(bundle);
-        mPendingServiceIntent = PendingIntent.getBroadcast(this, MyAlarmReceiver.REQUEST_CODE,
-                mServiceIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+        intent.putExtras(bundle);
+        return PendingIntent.getBroadcast(context, MyAlarmReceiver.REQUEST_CODE, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
     private void initViews() {
@@ -211,12 +207,12 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     private void scheduleAlarm() {
         long firstMillis = System.currentTimeMillis();
         AlarmManager alarmManager = (AlarmManager) this.getSystemService(Context.ALARM_SERVICE);
-        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, firstMillis, 1000 * 60 * 3, mPendingServiceIntent);
+        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, firstMillis, 1000 * 60 * 3, mAlarmManagerIntent);
     }
 
     private void stopScheduleAlarm() {
         AlarmManager am = (AlarmManager) this.getSystemService(Context.ALARM_SERVICE);
-        am.cancel(mPendingServiceIntent);
+        am.cancel(mAlarmManagerIntent);
     }
 
     @Override
@@ -272,16 +268,14 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         float cameraOffSet= (mDisplayWidth - width) / 2;
         float subAreaWidth = width / 3;
 
-        mSectorDividersPos = new float[]{cameraOffSet, cameraOffSet + subAreaWidth,
-                cameraOffSet + (subAreaWidth * 2), cameraOffSet + width}; //TODO: set values in terms of landscape orientation for now
-
         for(int i = 0; i < mText_Infos.length; i++) {
             if (mText_Infos[i] != null) {
                 mText_Infos[i].setWidth((int) subAreaWidth);
             }
         }
 
-        setDivderAndInfoPosition();
+        setDivderAndInfoPosition(new float[]{cameraOffSet, cameraOffSet + subAreaWidth,
+                cameraOffSet + (subAreaWidth * 2), cameraOffSet + width});
     }
 
     @Override
@@ -317,10 +311,12 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
         int matRows = masked.rows();
         int matCols = masked.cols();
-        initWatchPlantServiceIntents(2, new Rect[]{/*new Rect(0, 0, matCols, matRows)
-                , */new Rect(0, 0, matCols/3, matRows)
-                , new Rect(0, 0, matCols/3*2, matRows)
-                , new Rect(0, 0, matCols, matRows)});
+        if (mAlarmManagerIntent == null) {
+            mAlarmManagerIntent = getWatchPlantServiceIntent(this, 2, new Rect[]{
+                    new Rect(0, 0, matCols / 3, matRows)
+                    , new Rect(0, 0, matCols / 3 * 2, matRows)
+                    , new Rect(0, 0, matCols, matRows)});
+        }
         for (int i = 0; i < PLANTS_NUM; i++) {
             contourPoints.clear();
             if (mCurrentOrientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -398,8 +394,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         return preview;
     }
 
-    private void setDivderAndInfoPosition() {
-        mH.obtainMessage(H.SET_DIVIDER_AND_INFO_POS).sendToTarget();
+    private void setDivderAndInfoPosition(float[] newPosition) {
+        mH.obtainMessage(H.SET_DIVIDER_AND_INFO_POS, newPosition).sendToTarget();
     }
 
     private void setText(String[] str) {
@@ -441,13 +437,14 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                     }
                     break;
                 case SET_DIVIDER_AND_INFO_POS:
+                    float[] pos = (float[]) msg.obj;
                     for (int i = 0; i < mDividerViews.length; i++) {
                         if (mDividerViews[i] != null) {
-                            mDividerViews[i].setX((int) mSectorDividersPos[i]);
+                            mDividerViews[i].setX((int) pos[i]);
                         }
 
                         if (i < mText_Infos.length && mText_Infos[i] != null) {
-                            mText_Infos[i].setX((int) mSectorDividersPos[i] + 10);
+                            mText_Infos[i].setX((int) pos[i] + 10);
                         }
                     }
                     break;
