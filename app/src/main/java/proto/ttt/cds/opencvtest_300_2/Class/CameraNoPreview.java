@@ -17,14 +17,14 @@ import java.util.ArrayList;
  * Created by changdo on 17. 8. 2.
  */
 
-public class CameraAction {
-    public static final String TAG = "CameraAction";
+public class CameraNoPreview {
+    public static final String TAG = "CameraNoPreview";
 
 //    private static final boolean DEBUG_CAMERA_ACTION = PlantWatcherService.DEBUG;
     private static final boolean DEBUG_CAMERA_ACTION = false;
 
     public static final int INVALID_CAM_INDEX = -99;
-    public static final int DEFAULT_CAM_INDEX = -100;
+    public static final int DEFAULT_CAM_INDEX = 0;
     public static final File STORAGE_DIR_FILE = Environment
             .getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM);
 
@@ -37,30 +37,30 @@ public class CameraAction {
     private ArrayList<ICameraCallback> listeners = new ArrayList<>();
 
 
-    public CameraAction() {
+    public CameraNoPreview() {
         if (openedCamIndex.length == 0) {
-            Log.d(TAG, "CameraAction(): No available cameras");
+            Log.d(TAG, "CameraNoPreview(): No available cameras");
             return;
         }
     }
 
-    public CameraAction(int index) {
+    public CameraNoPreview(int index) {
         if (openedCamIndex.length == 0) {
-            Log.d(TAG, "CameraAction(): No available cameras");
+            Log.d(TAG, "CameraNoPreview(): No available cameras");
             return;
         }
     }
 
     public void openCamera() {
         if (mOpenCamIndex == DEFAULT_CAM_INDEX ) {
-            Log.d(TAG, "openCamera(): default cam already opened");
+            Log.d(TAG, "openCamera(): DEFAULT CAM already opened");
             return;
         }
 
         try {
             mCam = Camera.open();
             updateCameraStatus(DEFAULT_CAM_INDEX, true);
-            Log.d(TAG, "openCamera(): default camera opened");
+            Log.d(TAG, "openCamera(): DEFAULT CAMERA opened");
         } catch (RuntimeException e) {
             Log.e(TAG, "openCamera(): Camera failed to open: " + e.getLocalizedMessage());
         }
@@ -68,14 +68,14 @@ public class CameraAction {
 
     public void openCamera(int index) {
         if (mOpenCamIndex == index ) {
-            Log.d(TAG, "openCamera(): camera# " + index + " already opened");
+            Log.d(TAG, "openCamera(): CAMERA# " + index + " already opened");
             return;
         }
 
         try {
             mCam = Camera.open(index);
             updateCameraStatus(index, true);
-            Log.d(TAG, "openCamera(): camera# " + index + " opened");
+            Log.d(TAG, "openCamera(): CAMERA# " + index + " opened");
         } catch (RuntimeException e) {
             Log.e(TAG, "openCamera(): Camera failed to open: " + e.getLocalizedMessage());
         }
@@ -109,13 +109,13 @@ public class CameraAction {
         }
     }
 
-    public void takePictureNoPrev(String name) {
+    public void takePictureWithoutPrev(String name) {
         if (mCam != null) {
             try {
                 mCam.setPreviewTexture(new SurfaceTexture(0));
                 mCam.startPreview();
                 mCam.takePicture(null, null, getJpegCallback(name));
-                Log.d(TAG, "takePictureNoPrev(): picture taken");
+                Log.d(TAG, "takePictureWithoutPrev(): picture taken");
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -156,8 +156,8 @@ public class CameraAction {
 
     final class H extends Handler {
         public static final int NOTIFY_CAMERA_OPENED = 0;
-        public static final int NOTIFY_PICTURE_TAKEN = 2;
-        public static final int NOTIFY_CAMERA_CLOSED = 3;
+        public static final int NOTIFY_PICTURE_TAKEN = 1;
+        public static final int NOTIFY_CAMERA_CLOSED = 2;
 
         @Override
         public void handleMessage(Message msg) {

@@ -17,7 +17,7 @@ import proto.ttt.cds.opencvtest_300_2.Class.PlantData;
 public class PlantDBHandler extends SQLiteOpenHelper {
     public static final String TAG = "PlantDBHandler";
 
-    public static final int DATABASE_VERSION = 3;
+    public static final int DATABASE_VERSION = 5;
     public static final String DATABASE_NAME = "PlantInfoTable";
 
     private static final boolean DEBUG_PLANT_DB = true;
@@ -25,6 +25,7 @@ public class PlantDBHandler extends SQLiteOpenHelper {
     private static final String SQL_CREATE_ENTRIES =
             "CREATE TABLE " + FeedEntry.TABLE_NAME + " ("
             + FeedEntry._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, "
+            + FeedEntry.COLUMN_LOCATION + " INTEGER, "
             + FeedEntry.COLUMN_NAME + " TEXT, "
             + FeedEntry.COLUMN_ORDER + " INTEGER, "
             + FeedEntry.COLUMN_AREA_SIZE + " DOUBLE, "
@@ -56,6 +57,7 @@ public class PlantDBHandler extends SQLiteOpenHelper {
 
     public void insertData(PlantData info) {
         ContentValues values = new ContentValues();
+        values.put(FeedEntry.COLUMN_LOCATION, info.getLocation());
         values.put(FeedEntry.COLUMN_NAME, info.getName());
         values.put(FeedEntry.COLUMN_ORDER, info.getOrder());
         values.put(FeedEntry.COLUMN_AREA_SIZE, info.getAreaSize());
@@ -68,6 +70,7 @@ public class PlantDBHandler extends SQLiteOpenHelper {
         Cursor cursor = this.getReadableDatabase().query(
                 FeedEntry.TABLE_NAME,
                 new String[] {FeedEntry._ID,
+                        FeedEntry.COLUMN_LOCATION,
                         FeedEntry.COLUMN_NAME,
                         FeedEntry.COLUMN_ORDER,
                         FeedEntry.COLUMN_AREA_SIZE,
@@ -77,26 +80,52 @@ public class PlantDBHandler extends SQLiteOpenHelper {
                 null,
                 null,
                 null);
-        if (cursor != null) {
-            cursor.moveToFirst();
-        }
 
+        return getRequestedData(cursor);
+    }
+
+    public PlantData[] getData(int location) {
+        Cursor cursor = this.getReadableDatabase().query(
+                FeedEntry.TABLE_NAME,
+                new String[] {FeedEntry._ID,
+                        FeedEntry.COLUMN_LOCATION,
+                        FeedEntry.COLUMN_NAME,
+                        FeedEntry.COLUMN_ORDER,
+                        FeedEntry.COLUMN_AREA_SIZE,
+                        FeedEntry.COLUMN_TIME},
+                FeedEntry.COLUMN_LOCATION + "=?",
+                new String[] {""+location},
+                null,
+                null,
+                null);
+
+        return getRequestedData(cursor);
+    }
+
+    private PlantData[] getRequestedData(Cursor cursor) {
+        if (cursor == null) {
+            Log.d(TAG, "getRequestedData(): cursor is NULL");
+            return null;
+        }
+        cursor.moveToFirst();
         PlantData[] plants = new PlantData[cursor.getCount()];
         int i = 0;
         while (cursor.moveToNext()) {
             int id = cursor.getInt(cursor.getColumnIndex(FeedEntry._ID));
+            int location = cursor.getInt(cursor.getColumnIndex(FeedEntry.COLUMN_LOCATION));
             String name = cursor.getString(cursor.getColumnIndex(FeedEntry.COLUMN_NAME));
             int order = cursor.getInt(cursor.getColumnIndex(FeedEntry.COLUMN_ORDER));
             double area = cursor.getDouble(cursor.getColumnIndex(FeedEntry.COLUMN_AREA_SIZE));
             long time = cursor.getLong(cursor.getColumnIndex(FeedEntry.COLUMN_TIME));
 
             if (DEBUG_PLANT_DB) Log.d(TAG, "getData(): id = " + id
+                    + "\tloc = " + location
                     + "\tname = " + name
                     + "\torder = " + order
                     + "\tarea = " + area
                     + "\ttime = " + time);
 
-            plants[i++] = new PlantData(name, order, area, time);
+            plants[i++] = new PlantData(location, name, order, area, time);
         }
         return plants;
     }
@@ -111,6 +140,7 @@ public class PlantDBHandler extends SQLiteOpenHelper {
 
     public static class FeedEntry implements BaseColumns {
         public static final String TABLE_NAME = "PlantGrowthProgress";
+        public static final String COLUMN_LOCATION = "potlocation";
         public static final String COLUMN_NAME = "name";
         public static final String COLUMN_ORDER = "biggestorder";
         public static final String COLUMN_AREA_SIZE = "areasize";

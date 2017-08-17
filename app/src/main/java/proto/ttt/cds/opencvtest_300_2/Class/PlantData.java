@@ -7,22 +7,17 @@ package proto.ttt.cds.opencvtest_300_2.Class;
 public class PlantData {
 
     int id;
-    int mOrder;
+    int mLocation;
     String mName;
+    int mOrder;
     double mAreasize;
     long mTime;
     String mRecipe;
 
     public PlantData() {}
 
-    public PlantData(int id, String name, double size, long time) {
-        this.id = id;
-        this.mName = name;
-        this.mAreasize = size;
-        this.mTime = time;
-    }
-
-    public PlantData(String name, int order, double size, long time) {
+    public PlantData(int loc, String name, int order, double size, long time) {
+        this.mLocation = loc;
         this.mName = name;
         this.mOrder = order;
         this.mAreasize = size;
@@ -31,6 +26,10 @@ public class PlantData {
 
     public String getName() {
         return mName;
+    }
+
+    public int getLocation() {
+        return mLocation;
     }
 
     public int getOrder() {

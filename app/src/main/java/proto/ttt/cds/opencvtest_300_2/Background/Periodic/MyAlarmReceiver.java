@@ -7,6 +7,8 @@ import android.os.Bundle;
 
 /**
  * Created by changdo on 17. 8. 2.
+ *
+ * All periodic services are started through here
  */
 
 public class MyAlarmReceiver extends BroadcastReceiver {
@@ -25,7 +27,6 @@ public class MyAlarmReceiver extends BroadcastReceiver {
                 if (extras != null) {
                     serviceIntent.putExtras(extras);
                 }
-
                 serviceIntent.setAction(PlantWatcherService.ACTION_GET_AREA);
                 context.startService(serviceIntent);
                 break;
