@@ -1,6 +1,6 @@
 /*
  * This file is auto-generated.  DO NOT MODIFY.
- * Original file: /home/changdo/AndroidStudioProjects/OpenCVTest_300_2/openCVLibrary300/src/main/aidl/org/opencv/engine/OpenCVEngineInterface.aidl
+ * Original file: /home/changdo/AndroidStudioProjects/Green_dataSave/openCVLibrary300/src/main/aidl/org/opencv/engine/OpenCVEngineInterface.aidl
  */
 package org.opencv.engine;
 /**

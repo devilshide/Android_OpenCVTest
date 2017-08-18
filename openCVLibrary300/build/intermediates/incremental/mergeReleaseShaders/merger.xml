@@ -1,2 +1,2 @@
 <?xml version="1.0" encoding="utf-8"?>
-<merger version="3"><dataSet config="main"><source path="/home/changdo/AndroidStudioProjects/OpenCVTest_300_2/openCVLibrary300/src/main/shaders"/></dataSet><dataSet config="release"><source path="/home/changdo/AndroidStudioProjects/OpenCVTest_300_2/openCVLibrary300/src/release/shaders"/></dataSet></merger>
+<merger version="3"><dataSet config="main"><source path="/home/changdo/AndroidStudioProjects/Green_dataSave/openCVLibrary300/src/main/shaders"/></dataSet><dataSet config="release"><source path="/home/changdo/AndroidStudioProjects/Green_dataSave/openCVLibrary300/src/release/shaders"/></dataSet></merger>

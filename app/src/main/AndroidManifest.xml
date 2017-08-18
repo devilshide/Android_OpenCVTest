@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="proto.ttt.cds.opencvtest_300_2" >
+    package="proto.ttt.cds.green_data" >
 
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
@@ -14,7 +14,7 @@
         android:theme="@style/AppTheme" >
 
         <activity
-            android:name=".Activity.MainActivity">
+            android:name="proto.ttt.cds.green_data.Activity.MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -23,11 +23,11 @@
         </activity>
 
         <service
-            android:name=".Background.Periodic.PlantWatcherService"
+            android:name="proto.ttt.cds.green_data.Background.Periodic.PlantWatcherService"
             android:exported="false" />
 
         <receiver
-            android:name=".Background.Periodic.MyAlarmReceiver"
+            android:name="proto.ttt.cds.green_data.Background.Periodic.MyAlarmReceiver"
             android:process=":remote" />
 
     </application>
