@@ -25,12 +25,10 @@ import java.util.List;
 
 public class ImageProcessor {
     public static final String TAG = "ImageProcessor";
-
     private static final boolean DEBUG_IMAGE_PROCESSOR = false;
 
     public static final int MAX_CONTOUR = 0;
 
-    private String mFilePath;
     private Mat mRGB, mTempMat;
 
     static {
@@ -43,36 +41,29 @@ public class ImageProcessor {
 
     public ImageProcessor() {}
 
-    public ImageProcessor(String filePath) {
-        mFilePath = filePath;
-    }
-
-//    public double[][] getBiggestContoursFromCamera(CameraBridgeViewBase.CvCameraViewFrame inputFrame
-//            , Rect[] subSection, int areaCnt) {
-//        return getBiggestContours(inputFrame.rgba(), subSection, areaCnt);
-//    }
-
-    public double[][] getBiggestContoursFromImg(Rect[] subAreaRect, Rect wholeRect, int numOfContour) {
-        Bitmap bitmap = getRGBBitmap();
+    public double[][] getBiggestContoursFromImg(String imgPath, Rect[] subAreaRect, Rect wholeRect,
+                                                int numOfContour) {
+        Bitmap bitmap = getRGBBitmap(imgPath);
         if (bitmap != null) {
             Mat inputMat = new Mat(bitmap.getHeight(), bitmap.getWidth(), CvType.CV_8UC3);
             Utils.bitmapToMat(bitmap, inputMat);
 
             return getBiggestContours(inputMat, subAreaRect, wholeRect, numOfContour);
         }
-        Log.d(TAG, "getBiggestContoursFromImg(): No contours found");
+        Log.d(TAG, "getBiggestContoursFromImg(): No Bitmap found from path = " + imgPath);
         return null;
     }
 
     /**
      * @param rgbMat Mat value of an image in RGB format
-     * @param subAreaRect This can be null if there are no sub areas. This will search contours within the
+     * @param subs This can be null if there are no sub areas. This will search contours within the
      *                 entire image
+     * @param origArea The area where sub areas were measured
      * @param numOfContour number of biggest contours to search inside each area
      * @return The area for the biggest contours in the biggest order for each sub areas
      *
     */
-    private double[][] getBiggestContours(Mat rgbMat, Rect[] subs, Rect whole, int numOfContour) {
+    private double[][] getBiggestContours(Mat rgbMat, Rect[] subs, Rect origArea, int numOfContour) {
         if (rgbMat == null || numOfContour < 1 || (subs != null && subs.length == 0)) {
             return null;
         }
@@ -94,7 +85,7 @@ public class ImageProcessor {
         Core.inRange(mTempMat, green_l, green_u, masked);
         Imgproc.dilate(masked, masked, Imgproc.getStructuringElement(Imgproc.MORPH_DILATE, new Size(15,15)));
 
-        Rect[] subAreaRect = reCalcSubArea(subs, whole, new Rect(0, 0, masked.cols(), masked.rows()));
+        Rect[] subAreaRect = reCalcSubArea(subs, origArea, new Rect(0, 0, masked.cols(), masked.rows()));
 
         List<MatOfPoint> contourPoints = new ArrayList<MatOfPoint>();
 
@@ -102,7 +93,6 @@ public class ImageProcessor {
         int subAreasCnt = subAreaRect == null ? 1 : subAreaRect.length;
         double[][] biggestAreas = new double[numOfContour][subAreasCnt];
         for (int i = 0; i < subAreasCnt; i++) {
-
             contourPoints.clear();
 
             if (subAreaRect == null) {
@@ -153,49 +143,50 @@ public class ImageProcessor {
         return biggestAreas;
     }
 
-    private Bitmap getRGBBitmap() {
-        if (mFilePath != null) {
-            Bitmap bitmap = BitmapFactory.decodeFile(mFilePath);
+    private Bitmap getRGBBitmap(String path) {
+        if (path != null) {
+            Bitmap bitmap = BitmapFactory.decodeFile(path);
             Bitmap bitmap32 = bitmap.copy(Bitmap.Config.ARGB_8888, true);
             return bitmap32;
         }
-        Log.d(TAG, "getRGBBitmap(): File path not set");
+        Log.d(TAG, "getRGBBitmap(): File path is NULL");
         return null;
     }
 
-    private Rect[] reCalcSubArea(Rect[] subAreas, Rect wholeArea, Rect newWholeArea) {
+    /**
+     * Recalculates all sub areas to fit the size of the new area
+     */
+    private Rect[] reCalcSubArea(Rect[] subAreas, Rect area, Rect newArea) {
+        if (area.equals(newArea)) {
+            return subAreas;
+        }
         Rect[] newSubArea = new Rect[subAreas.length];
         double topRatio, bottomRatio, leftRatio, rightRatio;
         for (int i = 0; i < subAreas.length; i++) {
-            if (wholeArea.contains(subAreas[i])) {
+            Rect subRect = subAreas[i];
+            if (area.contains(subRect)) {
                 topRatio = bottomRatio = leftRatio = rightRatio = 0.0;
-                if (subAreas[i].top != wholeArea.top) {
-                    topRatio = (double)(subAreas[i].top - wholeArea.top) / wholeArea.height();
+                if (subRect.top != area.top) {
+                    topRatio = (double)(subRect.top - area.top) / area.height();
                 }
-                if (subAreas[i].bottom != wholeArea.bottom) {
-                    bottomRatio = (double)(wholeArea.bottom - subAreas[i].bottom) / wholeArea.height();
+                if (subRect.bottom != area.bottom) {
+                    bottomRatio = (double)(area.bottom - subRect.bottom) / area.height();
                 }
-                if (subAreas[i].left != wholeArea.left) {
-                    leftRatio = (double)(subAreas[i].left - wholeArea.left) / wholeArea.width();
+                if (subRect.left != area.left) {
+                    leftRatio = (double)(subRect.left - area.left) / area.width();
                 }
-                if (subAreas[i].right != wholeArea.right) {
-                    rightRatio = (double)(wholeArea.right - subAreas[i].right) / wholeArea.width();
+                if (subRect.right != area.right) {
+                    rightRatio = (double)(area.right - subRect.right) / area.width();
                 }
 
-                int newTop = (int)(newWholeArea.top + (newWholeArea.height() * topRatio));
-                int newBottom = (int)(newWholeArea.bottom - (newWholeArea.height() * bottomRatio));
-                int newLeft = (int)(newWholeArea.left + (newWholeArea.width() * leftRatio));
-                int newRight = (int)(newWholeArea.right - (newWholeArea.width() * rightRatio));
+                int newTop = (int)(newArea.top + (newArea.height() * topRatio));
+                int newBottom = (int)(newArea.bottom - (newArea.height() * bottomRatio));
+                int newLeft = (int)(newArea.left + (newArea.width() * leftRatio));
+                int newRight = (int)(newArea.right - (newArea.width() * rightRatio));
                 newSubArea[i] = new Rect(newLeft, newTop, newRight, newBottom);
             }
         }
-
         return newSubArea;
     }
-
-    public void setFilePath(String path) {
-        mFilePath = path;
-    }
-
 
 }

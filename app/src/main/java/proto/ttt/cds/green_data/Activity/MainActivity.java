@@ -24,7 +24,6 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
@@ -60,7 +59,6 @@ public class MainActivity extends AppCompatActivity {
     private SurfaceHolder.Callback mSurfaceListener;
     private Camera mCamera;
 
-    private String[] mPrevFiles = new String[] {"prevImg0.jpeg", "prevImg1.jpeg", "prevImg2.jpeg"};
     private ImageView[] mPrevImageViews = new ImageView[PREVIEW_IMG_NUM];
     private CameraNoPreview mCam;
     private CameraNoPreview.ICameraCallback mCameraPrevListener;
@@ -88,7 +86,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (!USE_CAMERA_PREVIEW) {
-            mCam = new CameraNoPreview();
+            mCam = new CameraNoPreview(null);
         }
 
         initViews();
@@ -108,8 +106,8 @@ public class MainActivity extends AppCompatActivity {
             if (mDividersPos.length >= 2 && mFrameHeight != 0) {
                 Rect[] subAreas = new Rect[mDividersPos.length - 1];
                 for (int i = 0; i < subAreas.length; i++) {
-                    subAreas[i] = new Rect((int)(mDividersPos[i] - mCameraOffSet), 0,
-                            (int)(mDividersPos[i + 1] - mCameraOffSet), mFrameHeight);
+                    subAreas[i] = new Rect((int)(mDividersPos[i] - mViewOffset), 0,
+                            (int)(mDividersPos[i + 1] - mViewOffset), mFrameHeight);
                 }
 
                 mAlarmManagerIntent = createWatchPlantServiceIntent(this,
@@ -136,7 +134,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    float mCameraOffSet;
+    float mViewOffset;
     private void initViews() {
         Log.d(TAG, "initViews()");
         if (USE_CAMERA_PREVIEW) {
@@ -149,7 +147,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         for(int i = 0; i < mInfoViews.length; i++) {
-            int resId = getResources().getIdentifier("txt_largest_area_" + (i+1), "id", getPackageName());
+            int resId = getResources().getIdentifier("area_loc_" + (i+1), "id", getPackageName());
             mInfoViews[i] = (TextView) findViewById(resId);
         }
 
@@ -247,7 +245,6 @@ public class MainActivity extends AppCompatActivity {
                             parameters.setRotation(0);
                         }
                         mCamera.setParameters(parameters);
-
                         mCamera.setPreviewDisplay(holder);
                         mCamera.startPreview();
                     } catch (IOException e) {
@@ -276,7 +273,8 @@ public class MainActivity extends AppCompatActivity {
                     if (focusModes.contains(Camera.Parameters.FOCUS_MODE_AUTO)) {
                         params.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
                     }
-                    Camera.Size prevSize = getOptimalPreviewSize(params.getSupportedPreviewSizes(), params.getPictureSize().width, params.getPictureSize().height);
+                    Camera.Size prevSize = getOptimalPreviewSize(params.getSupportedPreviewSizes(),
+                            params.getPictureSize().width, params.getPictureSize().height);
                     params.setPreviewSize(prevSize.width, prevSize.height);
                     mCamera.setParameters(params);
                     mCamera.startPreview();
@@ -290,32 +288,44 @@ public class MainActivity extends AppCompatActivity {
         } else {
             mCameraPrevListener = new CameraNoPreview.ICameraCallback() {
                 @Override
-                public void onCameraOpened(int camIndex) {
+                public void onCameraOpened(int camId) {
                     Log.d(TAG, "onCameraOpened()");
                 }
 
                 @Override
-                public void onPictureTaken(int camIndex) {
+                public void onPictureTaken(int camId) {
                     Log.d(TAG, "onPictureTaken()");
-                    String path = CameraNoPreview.STORAGE_DIR_FILE.getAbsolutePath() + "/" + mPrevFiles[camIndex];
+                    String path = CameraNoPreview.DEFAULT_STORAGE_DIR.getAbsolutePath() + "/" + getImageFileName(camId);
                     Drawable d = Drawable.createFromPath(path);
-                    if (d != null) {
-                        mPrevImageViews[camIndex].setImageDrawable(d);
+                    if (d != null && mPrevImageViews[camId] != null) {
+                        mPrevImageViews[camId].setImageDrawable(d);
                         setFrameWidthAndHeight(d.getBounds().width(), d.getBounds().height());
                         setDividersAndInfoPos(mFrameWidth, mFrameHeight);
+
+                        int subAreaCnt = mDividersPos.length - 1;
+                        String[] infoText = new String[subAreaCnt];
+                        for (int i = 0; i < subAreaCnt; i++) {
+                            int realLoc = (camId * subAreaCnt) + i;
+                            infoText[i] = "Loc" + realLoc;
+                        }
+                        setText(infoText);
                     }
                 }
 
                 @Override
-                public void onCameraClosed(int camIndex) {
+                public void onCameraClosed(int camId) {
                     Log.d(TAG, "onCameraClosed()");
-                    takePictureForCamIfNeeded(camIndex + 1);
+                    takePictureForCamIfNeeded(camId + 1);
                 }
             };
             if (mCam != null) {
                 mCam.registerPictureTakenListeners(mCameraPrevListener);
             }
         }
+    }
+
+    private String getImageFileName(int camId) {
+        return "prevImg" + camId + ".jpeg";
     }
 
     private void setFrameWidthAndHeight(int width, int height) {
@@ -331,7 +341,7 @@ public class MainActivity extends AppCompatActivity {
     private void takePictureForCamIfNeeded(int camId) {
         if (camId >= 0 && camId < CAMERA_NUM && camId < PREVIEW_IMG_NUM) {
             mCam.openCamera(camId);
-            mCam.takePictureWithoutPrev(mPrevFiles[camId]);
+            mCam.takePictureWithoutPrev(getImageFileName(camId));
         }
     }
 
@@ -370,18 +380,18 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void setDividersAndInfoPos(int width, int height) {
+    private void setDividersAndInfoPos(int frameWidth, int frameHeight) {
         int winWidth = mWinRect.width();
-        mCameraOffSet = (winWidth - width) / 2;
-        float tmpSubWidth = width / PLANTS_NUM;
+        mViewOffset = (winWidth - frameWidth) / 2;
+        float tmpSubWidth = frameWidth / PLANTS_NUM;
 
         if (DEBUG) {
-            Log.d(TAG, "setDividersAndInfoPos(): mCameraOffSet = " + mCameraOffSet + ", tmpSubWidth = "
-                    + tmpSubWidth + "width = " + width + ", height = " + height + "winWidth = " + winWidth);
+            Log.d(TAG, "setDividersAndInfoPos(): mViewOffset = " + mViewOffset + ", tmpSubWidth = "
+                    + tmpSubWidth + "width = " + frameWidth + ", height = " + frameHeight + "winWidth = " + winWidth);
         }
 
         for (int i = 0; i < mDividersPos.length; i++) {
-            mDividersPos[i] = mCameraOffSet + tmpSubWidth * i;
+            mDividersPos[i] = mViewOffset + tmpSubWidth * i;
         }
         setDivderAndInfoPosition(mDividersPos);
     }

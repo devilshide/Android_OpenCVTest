@@ -31,7 +31,9 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
 
     public static final String ACTION_GET_AREA = "calc_area";
     // DB  Access
+    public static final String FILE_STORAGE_DIR = CameraNoPreview.DEFAULT_STORAGE_DIR.getAbsolutePath();
     public static final String FILE_NAME = "plantCam.jpeg";
+    public static final String IMG_DIR = FILE_STORAGE_DIR + "/" + FILE_NAME;
     public static final String SHARED_PREF_PLANT = "plantsName";
     // System values
     public static final int MAX_NUMBER_OF_PLANTS = 6;
@@ -61,9 +63,9 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
         mNumOfCameras = Camera.getNumberOfCameras();
         mContext = getApplicationContext();
 
-        mCam = new CameraNoPreview();
+        mCam = new CameraNoPreview(FILE_STORAGE_DIR);
         mCam.registerPictureTakenListeners(this);
-        mImageProcessor = new ImageProcessor(CameraNoPreview.STORAGE_DIR_FILE.getAbsolutePath() + "/" + FILE_NAME);
+        mImageProcessor = new ImageProcessor();
         mDB = new PlantDBHandler(mContext);
 
         loadPlantNames(mContext, mPlantsName);
@@ -79,32 +81,35 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "onStartCommand()");
         mIntent = intent;
-        mAction = mIntent.getAction();
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                switch(mAction) {
-                    case ACTION_GET_AREA:
-                        Bundle extras = mIntent.getExtras();
-                        mNumOfContours = extras.getInt("numberOfContours", 0);
-                        Parcelable[] allSubAreas = mIntent.getExtras().getParcelableArray("observeAreas");
-                        mSubAreaRect = new Rect[allSubAreas.length];
-                        for(int k = 0; k < allSubAreas.length; k++) {
-                            mSubAreaRect[k] = (Rect) allSubAreas[k];
-                        }
-                        Parcelable wholeArea = mIntent.getExtras().getParcelable("baseArea");
-                        mWholeAreaRect = (Rect) wholeArea;
+        if (mIntent != null) {
+            mAction = mIntent.getAction();
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    switch (mAction) {
+                        case ACTION_GET_AREA:
+                            Bundle extras = mIntent.getExtras();
+                            mNumOfContours = extras.getInt("numberOfContours", 0);
+                            Parcelable[] allSubAreas = mIntent.getExtras().getParcelableArray("observeAreas");
+                            mSubAreaRect = new Rect[allSubAreas.length];
+                            for (int k = 0; k < allSubAreas.length; k++) {
+                                mSubAreaRect[k] = (Rect) allSubAreas[k];
+                            }
+                            Parcelable wholeArea = mIntent.getExtras().getParcelable("baseArea");
+                            mWholeAreaRect = (Rect) wholeArea;
 
-                        takePictureForCamIfNeeded(0);
-                        break;
+                            takePictureIfNeeded(0);
+                            break;
+                    }
                 }
-            }
-        }).start();
-
-        return Service.START_STICKY;
+            }).start();
+            return Service.START_STICKY;
+        }
+        return Service.START_REDELIVER_INTENT;
     }
 
-    private void takePictureForCamIfNeeded(int camId) {
+    private void takePictureIfNeeded(int camId) {
+        mNumOfCameras = 1;
         if (camId >= 0 && camId < mNumOfCameras) {
             mCam.openCamera(camId);
             mCam.takePictureWithoutPrev(FILE_NAME);
@@ -127,18 +132,18 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
         if (DEBUG) Log.d(TAG, "onCameraClosed() camIndex = " + camIndex);
         switch(mAction) {
             case ACTION_GET_AREA:
-                takePictureForCamIfNeeded(camIndex + 1);
+                takePictureIfNeeded(camIndex + 1);
                 break;
         }
     }
 
     @Override
-    public void onPictureTaken(int camIndex) {
-        if (DEBUG) Log.d(TAG, "onPictureTaken() (CALLBACK)");
+    public void onPictureTaken(int camId) {
+        if (DEBUG) Log.d(TAG, "onPictureTaken() camIndex = " + camId);
         switch(mAction) {
             case ACTION_GET_AREA:
                 long currentTime = getCurrentTime();
-                double[][] contours = mImageProcessor.getBiggestContoursFromImg(mSubAreaRect,
+                double[][] contours = mImageProcessor.getBiggestContoursFromImg(IMG_DIR, mSubAreaRect,
                         mWholeAreaRect, mNumOfContours);
 
                 if (contours == null) {
@@ -148,10 +153,7 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
                 if (DEBUG) {
                     for (int i = 0; i < contours.length; i++) {
                         for (int j = 0; j < contours[0].length; j++) {
-//                            Log.d(TAG, "onPictureTaken(): CAMERA #" + mCurCamIndex +
-//                                    " contour[" + i + "][" + j + "] = " + contours[i][j]);
-                            Log.d(TAG, "onPictureTaken(): CAMERA #" + camIndex +
-                                    " contour[" + i + "][" + j + "] = " + contours[i][j]);
+                            Log.d(TAG, "onPictureTaken(): contour[" + i + "][" + j + "] = " + contours[i][j]);
                         }
                     }
                 }
@@ -159,14 +161,14 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
                 // Get the # number of the biggest contours in each sub section
                 synchronized (this) {
                     int smallestSizeIndex = mNumOfContours - 1;
+                    int subAreaCnt = contours[0].length;
                     for (int order = BIGGEST_CONTOUR_INDEX; order <= smallestSizeIndex; order++) {
-                        int count = contours[order].length;
-                        for (int camLoc = 0; camLoc < count; camLoc++) {
-//                            int realLoc = (mCurCamIndex * count) + camLoc;
-                            int realLoc = (camIndex * count) + camLoc;
+//                        int count = contours[order].length;
+                        for (int loc = 0; loc < subAreaCnt; loc++) {
+                            int realLoc = (camId * subAreaCnt) + loc;
                             String name = getPlant(realLoc);
                             if (name != null) {
-                                double areaSize = contours[order][camLoc];
+                                double areaSize = contours[order][loc];
                                 PlantData plant = new PlantData(realLoc, name, order, areaSize, currentTime);
                                 mDB.insertData(plant);
                             }
