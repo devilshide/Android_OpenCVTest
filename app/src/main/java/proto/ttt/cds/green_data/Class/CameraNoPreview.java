@@ -22,7 +22,7 @@ public class CameraNoPreview {
     public static final String TAG = "CameraNoPreview";
 
 //    private static final boolean DEBUG_CAMERA = PlantWatcherService.DEBUG;
-    private static final boolean DEBUG_CAMERA = false;
+    private static final boolean DEBUG_CAMERA = true;
     public static final int CAMERA_NUM = Camera.getNumberOfCameras();
 
     public static final int INVALID_CAM_INDEX = -99;
@@ -157,7 +157,7 @@ public class CameraNoPreview {
         return jpeg;
     }
 
-    public void registerPictureTakenListeners(ICameraCallback listener) {
+    public void registerCameraListener(ICameraCallback listener) {
         listeners.add(listener);
     }
 

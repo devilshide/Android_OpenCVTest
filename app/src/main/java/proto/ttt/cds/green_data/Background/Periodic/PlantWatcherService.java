@@ -64,7 +64,7 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
         mContext = getApplicationContext();
 
         mCam = new CameraNoPreview(FILE_STORAGE_DIR);
-        mCam.registerPictureTakenListeners(this);
+        mCam.registerCameraListener(this);
         mImageProcessor = new ImageProcessor();
         mDB = new PlantDBHandler(mContext);
 

@@ -56,12 +56,10 @@ public class MainActivity extends AppCompatActivity {
     private PendingIntent mAlarmManagerIntent;
 
     private SurfaceView mCameraSurfaceView;
-    private SurfaceHolder.Callback mSurfaceListener;
     private Camera mCamera;
 
     private ImageView[] mPrevImageViews = new ImageView[PREVIEW_IMG_NUM];
     private CameraNoPreview mCam;
-    private CameraNoPreview.ICameraCallback mCameraPrevListener;
 
     public MainActivity() {}
 
@@ -221,105 +219,106 @@ public class MainActivity extends AppCompatActivity {
     private void setListeners() {
         Log.d(TAG, "setListeners()");
         if (USE_CAMERA_PREVIEW) {
-            mSurfaceListener = new SurfaceHolder.Callback() {
-                @Override
-                public void surfaceDestroyed(SurfaceHolder holder) {
-                    Log.i(TAG, "surfaceDestroyed()");
-                    mCamera.release();
-                    mCamera = null;
-                }
-
-                @Override
-                public void surfaceCreated(SurfaceHolder holder) {
-                    Log.i(TAG, "surfaceCreated()");
-                    mCamera = Camera.open();
-                    try {
-                        Camera.Parameters parameters = mCamera.getParameters();
-                        if (getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE) {
-                            parameters.set("orientation", "portrait");
-                            mCamera.setDisplayOrientation(90);
-                            parameters.setRotation(90);
-                        } else {
-                            parameters.set("orientation", "landscape");
-                            mCamera.setDisplayOrientation(0);
-                            parameters.setRotation(0);
-                        }
-                        mCamera.setParameters(parameters);
-                        mCamera.setPreviewDisplay(holder);
-                        mCamera.startPreview();
-                    } catch (IOException e) {
-                        Log.d(TAG, "Error setting camera preview: " + e.getMessage());
-                    }
-                }
-
-                @Override
-                public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-                    Log.i(TAG, "surfaceChanged(): width = " + width + ", height = " + height);
-                    if (holder.getSurface() == null) {
-                        Log.d(TAG, "surfaceChanged(): No existing surface");
-                        return;
-                    }
-
-                    mFrameHeight = height;
-                    mFrameWidth = width;
-
-                    try {
-                        mCamera.stopPreview();
-                    } catch (Exception e) {
-                    }
-
-                    Camera.Parameters params = mCamera.getParameters();
-                    List<String> focusModes = params.getSupportedFocusModes();
-                    if (focusModes.contains(Camera.Parameters.FOCUS_MODE_AUTO)) {
-                        params.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
-                    }
-                    Camera.Size prevSize = getOptimalPreviewSize(params.getSupportedPreviewSizes(),
-                            params.getPictureSize().width, params.getPictureSize().height);
-                    params.setPreviewSize(prevSize.width, prevSize.height);
-                    mCamera.setParameters(params);
-                    mCamera.startPreview();
-
-                    setDividersAndInfoPos(width, height);
-                }
-            };
             if (mCameraSurfaceView != null) {
-                mCameraSurfaceView.getHolder().addCallback(mSurfaceListener);
+                mCameraSurfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
+                    @Override
+                    public void surfaceDestroyed(SurfaceHolder holder) {
+                        Log.i(TAG, "surfaceDestroyed()");
+                        mCamera.release();
+                        mCamera = null;
+                    }
+
+                    @Override
+                    public void surfaceCreated(SurfaceHolder holder) {
+                        Log.i(TAG, "surfaceCreated()");
+                        mCamera = Camera.open();
+                        try {
+                            Camera.Parameters parameters = mCamera.getParameters();
+                            if (getResources().getConfiguration().orientation !=
+                                    Configuration.ORIENTATION_LANDSCAPE) {
+                                parameters.set("orientation", "portrait");
+                                mCamera.setDisplayOrientation(90);
+                                parameters.setRotation(90);
+                            } else {
+                                parameters.set("orientation", "landscape");
+                                mCamera.setDisplayOrientation(0);
+                                parameters.setRotation(0);
+                            }
+                            mCamera.setParameters(parameters);
+                            mCamera.setPreviewDisplay(holder);
+                            mCamera.startPreview();
+                        } catch (IOException e) {
+                            Log.d(TAG, "Error setting camera preview: " + e.getMessage());
+                        }
+                    }
+
+                    @Override
+                    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+                        Log.i(TAG, "surfaceChanged(): width = " + width + ", height = " + height);
+                        if (holder.getSurface() == null) {
+                            Log.d(TAG, "surfaceChanged(): No existing surface");
+                            return;
+                        }
+
+                        mFrameHeight = height;
+                        mFrameWidth = width;
+
+                        try {
+                            mCamera.stopPreview();
+                        } catch (Exception e) {
+                        }
+
+                        Camera.Parameters params = mCamera.getParameters();
+                        List<String> focusModes = params.getSupportedFocusModes();
+                        if (focusModes.contains(Camera.Parameters.FOCUS_MODE_AUTO)) {
+                            params.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
+                        }
+                        Camera.Size prevSize = getOptimalPreviewSize(params.getSupportedPreviewSizes(),
+                                params.getPictureSize().width, params.getPictureSize().height);
+                        params.setPreviewSize(prevSize.width, prevSize.height);
+                        mCamera.setParameters(params);
+                        mCamera.startPreview();
+
+                        setDividersAndInfoPos(width, height);
+                    }
+                });
             }
         } else {
-            mCameraPrevListener = new CameraNoPreview.ICameraCallback() {
-                @Override
-                public void onCameraOpened(int camId) {
-                    Log.d(TAG, "onCameraOpened()");
-                }
-
-                @Override
-                public void onPictureTaken(int camId) {
-                    Log.d(TAG, "onPictureTaken()");
-                    String path = CameraNoPreview.DEFAULT_STORAGE_DIR.getAbsolutePath() + "/" + getImageFileName(camId);
-                    Drawable d = Drawable.createFromPath(path);
-                    if (d != null && mPrevImageViews[camId] != null) {
-                        mPrevImageViews[camId].setImageDrawable(d);
-                        setFrameWidthAndHeight(d.getBounds().width(), d.getBounds().height());
-                        setDividersAndInfoPos(mFrameWidth, mFrameHeight);
-
-                        int subAreaCnt = mDividersPos.length - 1;
-                        String[] infoText = new String[subAreaCnt];
-                        for (int i = 0; i < subAreaCnt; i++) {
-                            int realLoc = (camId * subAreaCnt) + i;
-                            infoText[i] = "Loc" + realLoc;
-                        }
-                        setText(infoText);
-                    }
-                }
-
-                @Override
-                public void onCameraClosed(int camId) {
-                    Log.d(TAG, "onCameraClosed()");
-                    takePictureForCamIfNeeded(camId + 1);
-                }
-            };
             if (mCam != null) {
-                mCam.registerPictureTakenListeners(mCameraPrevListener);
+                mCam.registerCameraListener(new CameraNoPreview.ICameraCallback() {
+                    @Override
+                    public void onCameraOpened(int camId) {
+                        Log.d(TAG, "onCameraOpened()");
+                    }
+
+                    @Override
+                    public void onPictureTaken(int camId) {
+                        Log.d(TAG, "onPictureTaken()");
+                        String path = CameraNoPreview.DEFAULT_STORAGE_DIR.getAbsolutePath() + "/"
+                                + getImageFileName(camId);
+                        Drawable d = Drawable.createFromPath(path);
+
+                        if (d != null && mPrevImageViews[camId] != null) {
+                            mPrevImageViews[camId].setImageDrawable(d);
+                            setFrameWidthAndHeight(d.getBounds().width(), d.getBounds().height());
+                            setDividersAndInfoPos(mFrameWidth, mFrameHeight);
+
+                            int subAreaCnt = mDividersPos.length - 1;
+                            String[] infoText = new String[subAreaCnt];
+                            for (int i = 0; i < subAreaCnt; i++) {
+                                int realLoc = (camId * subAreaCnt) + i;
+                                infoText[i] = "Loc" + realLoc;
+                            }
+                            setText(infoText);
+                        }
+                    }
+
+                    @Override
+                    public void onCameraClosed(int camId) {
+                        Log.d(TAG, "onCameraClosed()");
+                        takePictureForCamIfNeeded(camId + 1);
+                    }
+                });
             }
         }
     }
