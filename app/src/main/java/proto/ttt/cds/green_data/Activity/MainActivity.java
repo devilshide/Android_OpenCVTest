@@ -3,29 +3,27 @@ package proto.ttt.cds.green_data.Activity;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.res.Configuration;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.hardware.Camera;
 import android.os.Handler;
 import android.os.Message;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
-
-import java.io.IOException;
-import java.util.List;
 
 import proto.ttt.cds.green_data.Background.Periodic.MyAlarmReceiver;
 import proto.ttt.cds.green_data.Background.Periodic.PlantWatcherService;
@@ -36,30 +34,29 @@ import proto.ttt.cds.green_data.R;
 public class MainActivity extends AppCompatActivity {
     static final boolean DEBUG = true;
     public static final String TAG = "MainActivity";
-    public static final boolean USE_CAMERA_PREVIEW = false;
 
-    public static final int PLANTS_NUM = 3;
-    public static final int PREVIEW_IMG_NUM = 1;
+    public static final int PLANTS_NUM = 6;
+    public static final int PREVIEW_NUM = 2;
+    public static final int PLANTS_NUM_PREVIEW = PLANTS_NUM / PREVIEW_NUM;
     public static final int CAMERA_NUM = Camera.getNumberOfCameras();
 
     private TextView mInfoViews[] = new TextView[PLANTS_NUM];
-    private View[] mDividerViews = new View[PLANTS_NUM + 1];
-    private float[] mDividersPos = new float[PLANTS_NUM + 1];
+    private String mInfoTexts[] = new String[PLANTS_NUM];
+    private View[][] mDividerViews = new View[PREVIEW_NUM +1][PLANTS_NUM_PREVIEW];
+    private float[][] mDividerViewPos = new float[PREVIEW_NUM +1][PLANTS_NUM_PREVIEW];
+    private boolean[][] mStationaryDivIndex = new boolean[PREVIEW_NUM +1][PLANTS_NUM_PREVIEW];;
     private Button mBtn_startService, mBtn_stopService, mBtn_delData;
     final H mH = new H();
 
-    private int mFrameHeight, mFrameWidth;
     private int mCurOrientation;
-
-    private PlantDBHandler mDBHelper;
-
     private PendingIntent mAlarmManagerIntent;
 
-    private SurfaceView mCameraSurfaceView;
-    private Camera mCamera;
-
-    private ImageView[] mPrevImageViews = new ImageView[PREVIEW_IMG_NUM];
+    private ImageView[] mPrevImageView = new ImageView[PREVIEW_NUM];
+    private Rect[] mPrevRect = new Rect[PREVIEW_NUM];
     private CameraNoPreview mCam;
+
+    private String[] mPlantNames = new String[PlantWatcherService.MAX_NUMBER_OF_PLANTS];
+
 
     public MainActivity() {}
 
@@ -67,7 +64,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Log.d(TAG, "onCreate");
-        if (PREVIEW_IMG_NUM > CAMERA_NUM) {
+        setContentView(R.layout.activity_main);
+        if (PREVIEW_NUM > CAMERA_NUM) {
             Toast.makeText(this, "Number of preview images not supported in current system environment"
                     , Toast.LENGTH_LONG);
             finish();
@@ -75,17 +73,10 @@ public class MainActivity extends AppCompatActivity {
 
         getSupportActionBar().hide();
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-
         updateConfigForOrientationChange();
-        if (mCurOrientation == Configuration.ORIENTATION_PORTRAIT) {
-            setContentView(R.layout.activity_main_port);
-        } else if (mCurOrientation == Configuration.ORIENTATION_LANDSCAPE) {
-            setContentView(R.layout.activity_main_land);
-        }
 
-        if (!USE_CAMERA_PREVIEW) {
-            mCam = new CameraNoPreview(null);
-        }
+        mCam = new CameraNoPreview(null);
+        setStationaryIndexes();
 
         initViews();
         setListeners();
@@ -94,90 +85,138 @@ public class MainActivity extends AppCompatActivity {
         PlantWatcherService.savePlantName(this, "canary", 0);
         PlantWatcherService.savePlantName(this, "rose", 1);
         PlantWatcherService.savePlantName(this, "lettuce", 2);
+//        PlantWatcherService.loadPlantNames(this, mPlantNames);
+    }
 
-        // instantiate DB
-        mDBHelper = new PlantDBHandler(getApplicationContext());
+    private boolean isStationaryDivIndex(int y, int x) {
+        return mStationaryDivIndex[y][x];
+    }
+
+    private void setStationaryIndexes() {
+        for (int y=0; y<mStationaryDivIndex.length; y++) {
+            for (int x=0; x<mStationaryDivIndex[y].length; x++) {
+                if (x == 0 || y == mStationaryDivIndex.length-1) {
+                    mStationaryDivIndex[y][x] = true;
+                } else {
+                    mStationaryDivIndex[y][x] = false;
+                }
+            }
+        }
     }
 
     private void createAlarmManagerIntentIfNeeded() {
-        if (mAlarmManagerIntent == null) {
-            if (mDividersPos.length >= 2 && mFrameHeight != 0) {
-                Rect[] subAreas = new Rect[mDividersPos.length - 1];
-                for (int i = 0; i < subAreas.length; i++) {
-                    subAreas[i] = new Rect((int)(mDividersPos[i] - mViewOffset), 0,
-                            (int)(mDividersPos[i + 1] - mViewOffset), mFrameHeight);
+        if (mAlarmManagerIntent==null) {
+            if (mDividerViewPos.length>=2) {
+                Rect[][] subAreas = new Rect[PREVIEW_NUM][PLANTS_NUM_PREVIEW];
+                for (int y=0; y<subAreas.length; y++) {
+                    for (int x=0; x<subAreas[y].length; x++) {
+                        int left = (int)getRealDividerPos(y, x);
+                        int right = x < subAreas[y].length-1 ? (int)getRealDividerPos(y, x + 1) :
+                                mPrevRect[y].width();
+                        subAreas[y][x] = new Rect(left, 0, right, mPrevRect[y].height());
+                        if (DEBUG) {
+                            Log.d(TAG, "createAlarmManagerIntentIfNeeded(): subAreas(" + y + "," + x + ") = "
+                                    + subAreas[y][x]);
+                        }
+                    }
                 }
 
                 mAlarmManagerIntent = createWatchPlantServiceIntent(this,
-                        PlantWatcherService.DEFAULT_CONTOUR_COUNT, subAreas,
-                        new Rect(0, 0, mFrameWidth, mFrameHeight));
+                        PlantWatcherService.DEFAULT_CONTOUR_COUNT, mPrevRect, subAreas);
             } else {
-                Log.d(TAG, "createAlarmManagerIntentIfNeeded(): Intent NOT created! INVALID values: mDividersPos.length = "
-                        + mDividersPos.length + ", mFrameWidth = " + mFrameHeight);
+                Log.d(TAG, "createAlarmManagerIntentIfNeeded(): Intent NOT created! INVALID values: " +
+                        "mDividerViewPos.length = " + mDividerViewPos.length);
             }
         }
     }
 
     public static PendingIntent createWatchPlantServiceIntent(Context context, int numOfContours
-            , Rect[] areas, Rect wholeRect) {
+            ,Rect[] rect, Rect[][] subRect) {
         Intent intent = new Intent(context, MyAlarmReceiver.class);
         intent.setAction(MyAlarmReceiver.ACTION_WATCH_PLANT_SERVICE);
         Bundle bundle = new Bundle();
-        bundle.putInt("numberOfContours", numOfContours);
-        bundle.putParcelableArray("observeAreas", areas);
-        bundle.putParcelable("baseArea", wholeRect);
+        bundle.putInt(PlantWatcherService.BUNDLE_KEY_CONTOUR_NUM, numOfContours);
+        bundle.putParcelableArray(PlantWatcherService.BUNDLE_KEY_PREVIEW_RECT, rect);
+
+        int areaSize = subRect.length;
+        bundle.putInt(PlantWatcherService.BUNDLE_KEY_PREVIEW_NUM, areaSize);
+        for (int i=0; i <areaSize; i++) {
+            bundle.putParcelableArray(PlantWatcherService.BUNDLE_KEY_SUBAREA_RECT + i, subRect[i]);
+        }
+
         intent.putExtras(bundle);
         return PendingIntent.getBroadcast(context, MyAlarmReceiver.REQUEST_CODE, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
-
-    float mViewOffset;
     private void initViews() {
         Log.d(TAG, "initViews()");
-        if (USE_CAMERA_PREVIEW) {
-            mCameraSurfaceView = (SurfaceView) findViewById(getResources().getIdentifier("cameraPreview", "id", getPackageName()));
-        } else {
-            for (int i = 0; i < mPrevImageViews.length; i++) {
-                int resId = getResources().getIdentifier("imgPreview" + (i+1), "id", getPackageName());
-                mPrevImageViews[i] = (ImageView) findViewById(resId);
+        for (int i=0; i<mPrevImageView.length; i++) {
+            int resId = getResources().getIdentifier("imgPreview"+(i+1), "id", getPackageName());
+            mPrevImageView[i] = (ImageView) findViewById(resId);
+            final int camId = i;
+            if (mPrevImageView[i] != null) {
+                mPrevImageView[i].setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        takePictureForCamIfNeeded(camId);
+                    }
+                });
+            }
+            mPrevRect[i] = new Rect();
+        }
+
+        for(int i=0; i<mInfoViews.length; i++) {
+            int resId = getResources().getIdentifier("area_loc_"+(i+1), "id", getPackageName());
+            mInfoViews[i] = (TextView) findViewById(resId);
+            if (mInfoViews[i] != null) {
+                mInfoViews[i].setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+
+                    }
+                });
             }
         }
 
-        for(int i = 0; i < mInfoViews.length; i++) {
-            int resId = getResources().getIdentifier("area_loc_" + (i+1), "id", getPackageName());
-            mInfoViews[i] = (TextView) findViewById(resId);
-        }
+        for (int y=0; y<mDividerViews.length; y++) {
+            for (int x=0; x<mDividerViews[y].length; x++) {
+                int resId = getResources().getIdentifier("divider_"+y+"_"+x, "id", getPackageName());
+                mDividerViews[y][x] = (View)findViewById(resId);
 
-        for (int i = 0; i < mDividerViews.length; i++) {
-            int resId = getResources().getIdentifier("divider_" + (i+1), "id", getPackageName());
-            mDividerViews[i] = (View) findViewById(resId);
+                // set it to become touch-draggable
+                if (!isStationaryDivIndex(y, x) && mDividerViews[y][x]!=null) {
+                    final int posY = y;
+                    final int posX = x;
+                    mDividerViews[posY][posX].setOnTouchListener(new View.OnTouchListener() {
+                        float dx;
+                        @Override
+                        public boolean onTouch(View view, MotionEvent event) {
+                            switch (event.getAction()) {
+                                case MotionEvent.ACTION_DOWN:
+                                    dx = view.getX() - event.getRawX();
+                                    break;
+                                case MotionEvent.ACTION_MOVE:
+                                    float newX = event.getRawX() + dx;
+                                    float padding = 30;
+                                    float thresMin = getRealDividerPos(posY, posX - 1) + padding;
+                                    float thresMax = posX < mDividerViewPos[posY].length - 1 ?
+                                            getRealDividerPos(posY, posX + 1) - padding :
+                                            mPrevRect[posY].width() - padding;
 
-            // set it to become touch-draggable
-            if (mDividerViews[i] != null && i > 0 && i < mDividerViews.length - 1) {
-                final int pos = i;
-                mDividerViews[pos].setOnTouchListener(new View.OnTouchListener() {
-                    float dx;
-                    @Override
-                    public boolean onTouch(View view, MotionEvent event) {
-                        switch (event.getAction()) {
-                            case MotionEvent.ACTION_DOWN:
-                                dx = view.getX() - event.getRawX();
-                                break;
-                            case MotionEvent.ACTION_MOVE:
-                                float newX = event.getRawX() + dx;
-                                if (newX > mDividersPos[pos - 1] + 10
-                                        && newX < mDividersPos[pos + 1] - 10) {
-                                    mDividersPos[pos] = newX;
-                                    setDivderAndInfoPosition(mDividersPos);
-                                }
-                                break;
-                            default:
-                                return false;
+                                    if (newX + getRealDividerOffset(posY, posX) > thresMin &&
+                                            newX + getRealDividerOffset(posY, posX) < thresMax) {
+                                        mDividerViewPos[posY][posX] = newX;
+                                        setDivderAndInfoPosition(mDividerViewPos);
+                                    }
+                                    break;
+                                default:
+                                    return false;
+                            }
+                            return true;
                         }
-                        return true;
-                    }
-                });
+                    });
+                }
             }
         }
 
@@ -209,117 +248,78 @@ public class MainActivity extends AppCompatActivity {
             mBtn_delData.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
-                    mDBHelper.deleteData();
+                    new PlantDBHandler(getApplicationContext()).deleteData();
                     Toast.makeText(getApplicationContext(), "Data deleted", Toast.LENGTH_LONG).show();
                 }
             });
         }
     }
 
+    private float getRealDividerPos(int y, int x) {
+        float realDividerOffset = getRealDividerOffset(y, x);
+        if (realDividerOffset == -1) {
+            return -1;
+        }
+        return mDividerViewPos[y][x] + realDividerOffset;
+    }
+
+    private float getRealDividerOffset(int y, int x) {
+        String tag = "realDivider";
+        View divider = y>=0 && y <mDividerViews.length && x>=0 && x<mDividerViews[y].length ?
+                mDividerViews[y][x] : null;
+        if (divider == null) {
+            Log.d(TAG, "getRealDividerOffset() (y,x) = (" + y + "," + x + ") : no existing view");
+            return -1;
+        }
+        if (divider.findViewWithTag(tag) == null) {
+            Log.d(TAG, "getRealDividerOffset() (y,x) = (" + y + "," + x + ") : no existing real-divider view");
+            return -1;
+        }
+        return divider.findViewWithTag(tag).getX();
+    }
+
     private void setListeners() {
         Log.d(TAG, "setListeners()");
-        if (USE_CAMERA_PREVIEW) {
-            if (mCameraSurfaceView != null) {
-                mCameraSurfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
-                    @Override
-                    public void surfaceDestroyed(SurfaceHolder holder) {
-                        Log.i(TAG, "surfaceDestroyed()");
-                        mCamera.release();
-                        mCamera = null;
-                    }
+        if (mCam != null) {
+            mCam.registerCameraListener(new CameraNoPreview.ICameraCallback() {
+                @Override
+                public void onCameraOpened(int camId) {
+                    Log.d(TAG, "onCameraOpened() camId = " + camId);
+                }
 
-                    @Override
-                    public void surfaceCreated(SurfaceHolder holder) {
-                        Log.i(TAG, "surfaceCreated()");
-                        mCamera = Camera.open();
-                        try {
-                            Camera.Parameters parameters = mCamera.getParameters();
-                            if (getResources().getConfiguration().orientation !=
-                                    Configuration.ORIENTATION_LANDSCAPE) {
-                                parameters.set("orientation", "portrait");
-                                mCamera.setDisplayOrientation(90);
-                                parameters.setRotation(90);
-                            } else {
-                                parameters.set("orientation", "landscape");
-                                mCamera.setDisplayOrientation(0);
-                                parameters.setRotation(0);
+                @Override
+                public void onPictureTaken(int camId) {
+                    Log.d(TAG, "onPictureTaken() camId = " + camId);
+                    String path = CameraNoPreview.DEFAULT_STORAGE_DIR.getAbsolutePath() + "/"
+                            + getImageFileName(camId);
+                    Drawable d = Drawable.createFromPath(path);
+
+                    if (d != null && mPrevImageView[camId] != null && mPrevRect[camId] != null) {
+                        final int id = camId;
+                        mPrevImageView[id].setImageDrawable(d);
+                        mPrevImageView[id].setScaleType(ImageView.ScaleType.FIT_XY);
+                        mPrevImageView[id].addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+                            @Override
+                            public void onLayoutChange(View view, int i, int i1, int i2, int i3, int i4, int i5, int i6, int i7) {
+                                mPrevRect[id].set(i, i1, i2, i3);
+                                calcDividerDefaultPosForPrev(id, i, i2);
                             }
-                            mCamera.setParameters(parameters);
-                            mCamera.setPreviewDisplay(holder);
-                            mCamera.startPreview();
-                        } catch (IOException e) {
-                            Log.d(TAG, "Error setting camera preview: " + e.getMessage());
+                        });
+
+                        for (int i=0; i<PLANTS_NUM_PREVIEW; i++) {
+                            int realLoc = (camId * PLANTS_NUM_PREVIEW) + i;
+                            mInfoTexts[realLoc] = "Loc" + realLoc;
                         }
+                        setText(mInfoTexts);
                     }
+                }
 
-                    @Override
-                    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-                        Log.i(TAG, "surfaceChanged(): width = " + width + ", height = " + height);
-                        if (holder.getSurface() == null) {
-                            Log.d(TAG, "surfaceChanged(): No existing surface");
-                            return;
-                        }
-
-                        mFrameHeight = height;
-                        mFrameWidth = width;
-
-                        try {
-                            mCamera.stopPreview();
-                        } catch (Exception e) {
-                        }
-
-                        Camera.Parameters params = mCamera.getParameters();
-                        List<String> focusModes = params.getSupportedFocusModes();
-                        if (focusModes.contains(Camera.Parameters.FOCUS_MODE_AUTO)) {
-                            params.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
-                        }
-                        Camera.Size prevSize = getOptimalPreviewSize(params.getSupportedPreviewSizes(),
-                                params.getPictureSize().width, params.getPictureSize().height);
-                        params.setPreviewSize(prevSize.width, prevSize.height);
-                        mCamera.setParameters(params);
-                        mCamera.startPreview();
-
-                        setDividersAndInfoPos(width, height);
-                    }
-                });
-            }
-        } else {
-            if (mCam != null) {
-                mCam.registerCameraListener(new CameraNoPreview.ICameraCallback() {
-                    @Override
-                    public void onCameraOpened(int camId) {
-                        Log.d(TAG, "onCameraOpened()");
-                    }
-
-                    @Override
-                    public void onPictureTaken(int camId) {
-                        Log.d(TAG, "onPictureTaken()");
-                        String path = CameraNoPreview.DEFAULT_STORAGE_DIR.getAbsolutePath() + "/"
-                                + getImageFileName(camId);
-                        Drawable d = Drawable.createFromPath(path);
-
-                        if (d != null && mPrevImageViews[camId] != null) {
-                            mPrevImageViews[camId].setImageDrawable(d);
-                            setFrameWidthAndHeight(d.getBounds().width(), d.getBounds().height());
-                            setDividersAndInfoPos(mFrameWidth, mFrameHeight);
-
-                            int subAreaCnt = mDividersPos.length - 1;
-                            String[] infoText = new String[subAreaCnt];
-                            for (int i = 0; i < subAreaCnt; i++) {
-                                int realLoc = (camId * subAreaCnt) + i;
-                                infoText[i] = "Loc" + realLoc;
-                            }
-                            setText(infoText);
-                        }
-                    }
-
-                    @Override
-                    public void onCameraClosed(int camId) {
-                        Log.d(TAG, "onCameraClosed()");
-                        takePictureForCamIfNeeded(camId + 1);
-                    }
-                });
-            }
+                @Override
+                public void onCameraClosed(int camId) {
+                    Log.d(TAG, "onCameraClosed() camId = " + camId);
+                    takePictureForCamIfNeeded(camId + 1);
+                }
+            });
         }
     }
 
@@ -327,20 +327,10 @@ public class MainActivity extends AppCompatActivity {
         return "prevImg" + camId + ".jpeg";
     }
 
-    private void setFrameWidthAndHeight(int width, int height) {
-        double ratio = (double) width / height;
-        mFrameHeight = mWinRect.height();
-        if (mWinRect.width() != width) {
-            mFrameWidth = (int) (mFrameHeight * ratio);
-        } else {
-            mFrameWidth = width;
-        }
-    }
-
     private void takePictureForCamIfNeeded(int camId) {
-        if (camId >= 0 && camId < CAMERA_NUM && camId < PREVIEW_IMG_NUM) {
+        if (camId >= 0 && camId < CAMERA_NUM && camId < PREVIEW_NUM) {
             mCam.openCamera(camId);
-            mCam.takePictureWithoutPrev(getImageFileName(camId));
+            mCam.takePictureWithoutPreview(getImageFileName(camId));
         }
     }
 
@@ -361,6 +351,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         Log.d(TAG, "onPause");
+        if (mCam != null) {
+            mCam.closeCamera();
+        }
     }
 
     @Override
@@ -374,28 +367,19 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         Log.d(TAG, "onResume");
 
-        if (!USE_CAMERA_PREVIEW) {
-            takePictureForCamIfNeeded(0);
-        }
+        takePictureForCamIfNeeded(0);
     }
 
-    private void setDividersAndInfoPos(int frameWidth, int frameHeight) {
-        int winWidth = mWinRect.width();
-        mViewOffset = (winWidth - frameWidth) / 2;
-        float tmpSubWidth = frameWidth / PLANTS_NUM;
-
-        if (DEBUG) {
-            Log.d(TAG, "setDividersAndInfoPos(): mViewOffset = " + mViewOffset + ", tmpSubWidth = "
-                    + tmpSubWidth + "width = " + frameWidth + ", height = " + frameHeight + "winWidth = " + winWidth);
+    private void calcDividerDefaultPosForPrev(int camId, int left, int right) {
+        float tmpSubWidth = (float)(right - left) / PLANTS_NUM_PREVIEW;
+        for (int i = 0; i< mDividerViewPos[camId].length; i++) {
+            mDividerViewPos[camId][i] = left + tmpSubWidth * i - mDividerViews[camId][i].getPaddingLeft();
         }
-
-        for (int i = 0; i < mDividersPos.length; i++) {
-            mDividersPos[i] = mViewOffset + tmpSubWidth * i;
-        }
-        setDivderAndInfoPosition(mDividersPos);
+        setDivderAndInfoPosition(mDividerViewPos);
     }
 
-    private void setDivderAndInfoPosition(float[] newPosition) {
+
+    private void setDivderAndInfoPosition(float[][] newPosition) {
         mH.obtainMessage(H.SET_DIVIDER_AND_INFO_POSITION, newPosition).sendToTarget();
     }
 
@@ -413,39 +397,44 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private Camera.Size getOptimalPreviewSize(List<Camera.Size> sizes, int w, int h) {
-        final double ASPECT_TOLERANCE = 0.1;
-        double targetRatio = (double) h / w;
+    private void showInputDialog(int realLocation) {
+        final int loc = realLocation;
+        final Context context = this;
+        // get prompts.xml view
+        LayoutInflater li = LayoutInflater.from(this);
+        View promptsView = li.inflate(R.layout.dialog_plant_input, null);
 
-        if (sizes == null)
-            return null;
+        AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(this);
 
-        Camera.Size optimalSize = null;
-        double minDiff = Double.MAX_VALUE;
+        // set prompts.xml to alertdialog builder
+        alertDialogBuilder.setView(promptsView);
 
-        int targetHeight = h;
+        final EditText userInput = (EditText) promptsView.findViewById(R.id.editTextDialogUserInput);
 
-        for (Camera.Size size : sizes) {
-            double ratio = (double) size.height / size.width;
-            if (Math.abs(ratio - targetRatio) > ASPECT_TOLERANCE)
-                continue;
+        // set dialog message
+        alertDialogBuilder
+                .setCancelable(false)
+                .setPositiveButton("OK",
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int id) {
+                                // get user input and set it to result
+                                String str = userInput.getText().toString();
+                                PlantWatcherService.savePlantName(context, str, loc);
 
-            if (Math.abs(size.height - targetHeight) < minDiff) {
-                optimalSize = size;
-                minDiff = Math.abs(size.height - targetHeight);
-            }
-        }
+                            }
+                        })
+                .setNegativeButton("Cancel",
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog,int id) {
+                                dialog.cancel();
+                            }
+                        });
 
-        if (optimalSize == null) {
-            minDiff = Double.MAX_VALUE;
-            for (Camera.Size size : sizes) {
-                if (Math.abs(size.height - targetHeight) < minDiff) {
-                    optimalSize = size;
-                    minDiff = Math.abs(size.height - targetHeight);
-                }
-            }
-        }
-        return optimalSize;
+        // create alert dialog
+        AlertDialog alertDialog = alertDialogBuilder.create();
+
+        // show it
+        alertDialog.show();
     }
 
     final class H extends Handler {
@@ -466,17 +455,12 @@ public class MainActivity extends AppCompatActivity {
                     }
                     break;
                 case SET_DIVIDER_AND_INFO_POSITION:
-                    float[] pos = (float[]) msg.obj;
-                    for (int i = 0; i < mDividerViews.length; i++) {
-                        if (mDividerViews[i] != null) {
-                            mDividerViews[i].setX((int) pos[i]);
-                        }
-
-                        if (i < mInfoViews.length && mInfoViews[i] != null) {
-                            if (i == 0) {
-                                mInfoViews[i].setX((int) pos[i] + 10);
-                            } else {
-                                mInfoViews[i].setX((int) pos[i] + 25);
+                    float[][] pos = (float[][]) msg.obj;
+                    for (int y=0; y<mDividerViews.length; y++) {
+                        for (int x=0; x<mDividerViews[y].length; x++) {
+                         if (!isStationaryDivIndex(y, x) && mDividerViews[y][x] != null &&
+                                    mDividerViews[y][x].getX() != pos[y][x]) {
+                                mDividerViews[y][x].setX((int) pos[y][x]);
                             }
                         }
                     }

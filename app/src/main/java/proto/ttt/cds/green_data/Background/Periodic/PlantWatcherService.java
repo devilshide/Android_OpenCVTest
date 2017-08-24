@@ -38,6 +38,11 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
     // System values
     public static final int MAX_NUMBER_OF_PLANTS = 6;
     public static final int DEFAULT_CONTOUR_COUNT = 2;
+    // Intent keys
+    public static final String BUNDLE_KEY_CONTOUR_NUM = "numberOfContours";
+    public static final String BUNDLE_KEY_PREVIEW_RECT = "previewRect";
+    public static final String BUNDLE_KEY_PREVIEW_NUM = "previewNum";
+    public static final String BUNDLE_KEY_SUBAREA_RECT = "subAreaRect";
 
     private static final int BIGGEST_CONTOUR_INDEX = 0;
 
@@ -47,8 +52,8 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
 
     private int mNumOfCameras = 0;
     private int mNumOfContours = 0;
-    private Rect[] mSubAreaRect;
-    private Rect mWholeAreaRect;
+    private Rect[][] mSubAreaRect;
+    private Rect[] mPreviewRect;
 
     private Intent mIntent;
     private String mAction;
@@ -89,14 +94,23 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
                     switch (mAction) {
                         case ACTION_GET_AREA:
                             Bundle extras = mIntent.getExtras();
-                            mNumOfContours = extras.getInt("numberOfContours", 0);
-                            Parcelable[] allSubAreas = mIntent.getExtras().getParcelableArray("observeAreas");
-                            mSubAreaRect = new Rect[allSubAreas.length];
-                            for (int k = 0; k < allSubAreas.length; k++) {
-                                mSubAreaRect[k] = (Rect) allSubAreas[k];
+                            mNumOfContours = extras.getInt(BUNDLE_KEY_CONTOUR_NUM, 0);
+
+                            Parcelable[] previews = mIntent.getExtras().getParcelableArray(BUNDLE_KEY_PREVIEW_RECT);
+                            mPreviewRect = new Rect[previews.length];
+                            for (int i=0; i<mPreviewRect.length; i++) {
+                                mPreviewRect[i] = (Rect)previews[i];
                             }
-                            Parcelable wholeArea = mIntent.getExtras().getParcelable("baseArea");
-                            mWholeAreaRect = (Rect) wholeArea;
+
+                            int prevSize = extras.getInt(BUNDLE_KEY_PREVIEW_NUM, 0);
+                            mSubAreaRect = new Rect[prevSize][];
+                            for (int i=0; i<prevSize; i++) {
+                                Parcelable[] subs = mIntent.getExtras().getParcelableArray(BUNDLE_KEY_SUBAREA_RECT + i);
+                                mSubAreaRect[i] = new Rect[subs.length];
+                                for (int j=0; j<mSubAreaRect[i].length; j++) {
+                                    mSubAreaRect[i][j] = (Rect)subs[j];
+                                }
+                            }
 
                             takePictureIfNeeded(0);
                             break;
@@ -109,10 +123,9 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
     }
 
     private void takePictureIfNeeded(int camId) {
-        mNumOfCameras = 1;
         if (camId >= 0 && camId < mNumOfCameras) {
             mCam.openCamera(camId);
-            mCam.takePictureWithoutPrev(FILE_NAME);
+            mCam.takePictureWithoutPreview(FILE_NAME);
         }
     }
 
@@ -143,8 +156,8 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
         switch(mAction) {
             case ACTION_GET_AREA:
                 long currentTime = getCurrentTime();
-                double[][] contours = mImageProcessor.getBiggestContoursFromImg(IMG_DIR, mSubAreaRect,
-                        mWholeAreaRect, mNumOfContours);
+                double[][] contours = mImageProcessor.getBiggestContoursFromImg(IMG_DIR,
+                        mSubAreaRect[camId], mPreviewRect[camId], mNumOfContours);
 
                 if (contours == null) {
                     return;
@@ -160,11 +173,10 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
 
                 // Get the # number of the biggest contours in each sub section
                 synchronized (this) {
-                    int smallestSizeIndex = mNumOfContours - 1;
+                    int smallestContourIndex = mNumOfContours - 1;
                     int subAreaCnt = contours[0].length;
-                    for (int order = BIGGEST_CONTOUR_INDEX; order <= smallestSizeIndex; order++) {
-//                        int count = contours[order].length;
-                        for (int loc = 0; loc < subAreaCnt; loc++) {
+                    for (int order=BIGGEST_CONTOUR_INDEX; order<=smallestContourIndex; order++) {
+                        for (int loc=0; loc<subAreaCnt; loc++) {
                             int realLoc = (camId * subAreaCnt) + loc;
                             String name = getPlant(realLoc);
                             if (name != null) {
@@ -216,20 +228,20 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
         return time;
     }
 
-    public static boolean savePlantName(Context context, String plantName, int location) {
+    public static boolean savePlantName(Context context, String plantName, int realLocation) {
         SharedPreferences prefs = context.getSharedPreferences(SHARED_PREF_PLANT, 0);
         SharedPreferences.Editor editor = prefs.edit();
 
         if (DEBUG) {
-            if (prefs.getString("" + location, null) != null) {
-                Log.d(TAG, "savePlantName(): Overwriting at location: " + location + " for new plant: "
+            if (prefs.getString("" + realLocation, null) != null) {
+                Log.d(TAG, "savePlantName(): Overwriting at location: " + realLocation + " for new plant: "
                         + plantName);
             } else {
-                Log.d(TAG, "savePlantName(): Adding plant: " + plantName + " at location: " + location);
+                Log.d(TAG, "savePlantName(): Adding plant: " + plantName + " at location: " + realLocation);
             }
         }
 
-        editor.putString("" + location, plantName);
+        editor.putString("" + realLocation, plantName);
         return editor.commit();
     }
 

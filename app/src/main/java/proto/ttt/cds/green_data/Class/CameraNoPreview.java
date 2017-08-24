@@ -71,7 +71,7 @@ public class CameraNoPreview {
 
     public void openCamera(int index) {
         if (mOpenCamIndex == index ) {
-            Log.d(TAG, "openCamera(): CAMERA# " + index + " already opened");
+            Log.d(TAG, "openCamera(): CAMERA# " + index + " ALREADY OPENED!");
             return;
         }
 
@@ -116,7 +116,7 @@ public class CameraNoPreview {
         mStoragePath = storageDir != null ? storageDir : DEFAULT_STORAGE_DIR.getPath();
     }
 
-    public void takePictureWithoutPrev(@NonNull String name) {
+    public void takePictureWithoutPreview(@NonNull String name) {
         if (mStoragePath == null) {
             mStoragePath = DEFAULT_STORAGE_DIR.getAbsolutePath();
         }
@@ -126,12 +126,12 @@ public class CameraNoPreview {
                 mCam.setPreviewTexture(new SurfaceTexture(0));
                 mCam.startPreview();
                 mCam.takePicture(null, null, getJpegCallback(filePath));
-                Log.d(TAG, "takePictureWithoutPrev(): picture taken");
+                Log.d(TAG, "takePictureWithoutPreview(): picture taken");
             } catch (IOException e) {
                 e.printStackTrace();
             }
         } else {
-            Log.d(TAG, "takePictureWithoutPrev(): camera is NULL");
+            Log.d(TAG, "takePictureWithoutPreview(): camera is NULL");
         }
     }
 
@@ -144,7 +144,7 @@ public class CameraNoPreview {
                     FileOutputStream foStream = new FileOutputStream(new File(filePath));
                     foStream.write(bytes);
                     foStream.close();
-                    if (DEBUG_CAMERA) Log.d(TAG, "getJpegCallback(): onPictureTaken");
+                    if (DEBUG_CAMERA) Log.d(TAG, "onPictureTaken(): files saved, path = " + filePath);
                     mH.obtainMessage(H.NOTIFY_PICTURE_TAKEN, mOpenCamIndex).sendToTarget();
                 } catch (IOException e) {
                     e.printStackTrace();
