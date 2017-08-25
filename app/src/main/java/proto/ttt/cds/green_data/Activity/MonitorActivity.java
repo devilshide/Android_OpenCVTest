@@ -64,7 +64,7 @@ public class MonitorActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Log.d(TAG, "onCreate");
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_monitor);
         if (PREVIEW_NUM > CAMERA_NUM) {
             Toast.makeText(this, "Number of preview images not supported in current system environment"
                     , Toast.LENGTH_LONG);
