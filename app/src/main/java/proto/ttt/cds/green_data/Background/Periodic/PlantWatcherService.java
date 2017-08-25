@@ -22,6 +22,9 @@ import proto.ttt.cds.green_data.Database.PlantDBHandler;
 
 /**
  * Created by changdo on 17. 8. 3.
+ *
+ * This is a Service to periodically take pictures, process image, and store phenotype data of plants
+ *
  */
 
 public class PlantWatcherService extends Service implements CameraNoPreview.ICameraCallback {
@@ -52,6 +55,7 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
 
     private int mNumOfCameras = 0;
     private int mNumOfContours = 0;
+    private int mNumOfPlants = 0;
     private Rect[][] mSubAreaRect;
     private Rect[] mPreviewRect;
 
@@ -112,6 +116,9 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
                                 }
                             }
 
+                            if (mNumOfPlants == 0) {
+                                mNumOfPlants = mSubAreaRect.length * mSubAreaRect[0].length;
+                            }
                             takePictureIfNeeded(0);
                             break;
                     }
@@ -164,8 +171,8 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
                 }
 
                 if (DEBUG) {
-                    for (int i = 0; i < contours.length; i++) {
-                        for (int j = 0; j < contours[0].length; j++) {
+                    for (int i=0; i<contours.length; i++) {
+                        for (int j=0; j<contours[0].length; j++) {
                             Log.d(TAG, "onPictureTaken(): contour[" + i + "][" + j + "] = " + contours[i][j]);
                         }
                     }
@@ -188,12 +195,22 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
                     }
                 }
 
-//                mDB.getData("canary"); //test
-                mDB.getData(1); //test
+//                mDB.getData(1); //test
+                printLogPlantData();
                 stopSelf();
                 break;
         }
 
+    }
+
+    public void printLogPlantData() {
+        if (PlantDBHandler.DEBUG_PLANT_DB) {
+            for (int i = 0; i < mNumOfPlants; i++) {
+                mDB.getData(i);
+            }
+        } else {
+            Log.d(TAG, "printLogPlantData(): Cannot print log in a non-debug mode");
+        }
     }
 
     private String getPlant(int location) {

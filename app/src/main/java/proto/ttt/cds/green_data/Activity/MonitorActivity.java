@@ -31,9 +31,9 @@ import proto.ttt.cds.green_data.Class.CameraNoPreview;
 import proto.ttt.cds.green_data.Database.PlantDBHandler;
 import proto.ttt.cds.green_data.R;
 
-public class MainActivity extends AppCompatActivity {
+public class MonitorActivity extends AppCompatActivity {
     static final boolean DEBUG = true;
-    public static final String TAG = "MainActivity";
+    public static final String TAG = "MonitorActivity";
 
     public static final int PLANTS_NUM = 6;
     public static final int PREVIEW_NUM = 2;
@@ -41,10 +41,10 @@ public class MainActivity extends AppCompatActivity {
     public static final int CAMERA_NUM = Camera.getNumberOfCameras();
 
     private TextView mInfoViews[] = new TextView[PLANTS_NUM];
-    private String mInfoTexts[] = new String[PLANTS_NUM];
-    private View[][] mDividerViews = new View[PREVIEW_NUM +1][PLANTS_NUM_PREVIEW];
-    private float[][] mDividerViewPos = new float[PREVIEW_NUM +1][PLANTS_NUM_PREVIEW];
-    private boolean[][] mStationaryDivIndex = new boolean[PREVIEW_NUM +1][PLANTS_NUM_PREVIEW];;
+    private String mInfoTextString[] = new String[PLANTS_NUM]; // Names of plants for each location respectively
+    private View[][] mDividerViews = new View[PREVIEW_NUM + 1][PLANTS_NUM_PREVIEW];
+    private float[][] mDividerViewPos = new float[PREVIEW_NUM + 1][PLANTS_NUM_PREVIEW];
+    private boolean[][] mStationaryDivIndex = new boolean[PREVIEW_NUM + 1][PLANTS_NUM_PREVIEW];;
     private Button mBtn_startService, mBtn_stopService, mBtn_delData;
     final H mH = new H();
 
@@ -58,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
     private String[] mPlantNames = new String[PlantWatcherService.MAX_NUMBER_OF_PLANTS];
 
 
-    public MainActivity() {}
+    public MonitorActivity() {}
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,13 +79,13 @@ public class MainActivity extends AppCompatActivity {
         setStationaryIndexes();
 
         initViews();
-        setListeners();
+        initCamera();
 
-        PlantWatcherService.resetPlantNames(this);
-        PlantWatcherService.savePlantName(this, "canary", 0);
-        PlantWatcherService.savePlantName(this, "rose", 1);
-        PlantWatcherService.savePlantName(this, "lettuce", 2);
-//        PlantWatcherService.loadPlantNames(this, mPlantNames);
+//        PlantWatcherService.resetPlantNames(this);
+//        PlantWatcherService.savePlantName(this, "canary", 0);
+//        PlantWatcherService.savePlantName(this, "rose", 1);
+//        PlantWatcherService.savePlantName(this, "lettuce", 2);
+        PlantWatcherService.loadPlantNames(this, mPlantNames);
     }
 
     private boolean isStationaryDivIndex(int y, int x) {
@@ -170,10 +170,11 @@ public class MainActivity extends AppCompatActivity {
             int resId = getResources().getIdentifier("area_loc_"+(i+1), "id", getPackageName());
             mInfoViews[i] = (TextView) findViewById(resId);
             if (mInfoViews[i] != null) {
+                final int realLoc = i;
                 mInfoViews[i].setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
-
+                        showInputDialog(realLoc);
                     }
                 });
             }
@@ -207,7 +208,7 @@ public class MainActivity extends AppCompatActivity {
                                     if (newX + getRealDividerOffset(posY, posX) > thresMin &&
                                             newX + getRealDividerOffset(posY, posX) < thresMax) {
                                         mDividerViewPos[posY][posX] = newX;
-                                        setDivderAndInfoPosition(mDividerViewPos);
+                                        setDivderViewPosition();
                                     }
                                     break;
                                 default:
@@ -248,6 +249,7 @@ public class MainActivity extends AppCompatActivity {
             mBtn_delData.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
+                    resetPlantName();
                     new PlantDBHandler(getApplicationContext()).deleteData();
                     Toast.makeText(getApplicationContext(), "Data deleted", Toast.LENGTH_LONG).show();
                 }
@@ -278,8 +280,8 @@ public class MainActivity extends AppCompatActivity {
         return divider.findViewWithTag(tag).getX();
     }
 
-    private void setListeners() {
-        Log.d(TAG, "setListeners()");
+    private void initCamera() {
+        Log.d(TAG, "initCamera()");
         if (mCam != null) {
             mCam.registerCameraListener(new CameraNoPreview.ICameraCallback() {
                 @Override
@@ -306,11 +308,7 @@ public class MainActivity extends AppCompatActivity {
                             }
                         });
 
-                        for (int i=0; i<PLANTS_NUM_PREVIEW; i++) {
-                            int realLoc = (camId * PLANTS_NUM_PREVIEW) + i;
-                            mInfoTexts[realLoc] = "Loc" + realLoc;
-                        }
-                        setText(mInfoTexts);
+                        updateInfoText();
                     }
                 }
 
@@ -375,16 +373,29 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i< mDividerViewPos[camId].length; i++) {
             mDividerViewPos[camId][i] = left + tmpSubWidth * i - mDividerViews[camId][i].getPaddingLeft();
         }
-        setDivderAndInfoPosition(mDividerViewPos);
+        setDivderViewPosition();
     }
 
-
-    private void setDivderAndInfoPosition(float[][] newPosition) {
-        mH.obtainMessage(H.SET_DIVIDER_AND_INFO_POSITION, newPosition).sendToTarget();
+    private void updateInfoText() {
+        for (int i=0; i<PREVIEW_NUM; i++) {
+            for (int j=0; j<PLANTS_NUM_PREVIEW; j++) {
+                int realLoc = (i * PLANTS_NUM_PREVIEW) + j;
+                if (mPlantNames[realLoc] == null) {
+                    mInfoTextString[realLoc] = "Loc" + realLoc;
+                } else {
+                    mInfoTextString[realLoc] = mPlantNames[realLoc];
+                }
+            }
+        }
+        setInfoText();
     }
 
-    private void setText(String[] str) {
-        mH.obtainMessage(H.SET_TEXT, str).sendToTarget();
+    private void setDivderViewPosition() {
+        mH.obtainMessage(H.SET_DIVIDER_AND_INFO_POSITION, mDividerViewPos).sendToTarget();
+    }
+
+    private void setInfoText() {
+        mH.obtainMessage(H.SET_INFO_TEXT, mInfoTextString).sendToTarget();
     }
 
     Rect mWinRect = new Rect();
@@ -418,9 +429,7 @@ public class MainActivity extends AppCompatActivity {
                         new DialogInterface.OnClickListener() {
                             public void onClick(DialogInterface dialog, int id) {
                                 // get user input and set it to result
-                                String str = userInput.getText().toString();
-                                PlantWatcherService.savePlantName(context, str, loc);
-
+                                setPlantName(userInput.getText().toString(), loc);
                             }
                         })
                 .setNegativeButton("Cancel",
@@ -437,14 +446,26 @@ public class MainActivity extends AppCompatActivity {
         alertDialog.show();
     }
 
+    private void setPlantName(String str, int realLocation) {
+        PlantWatcherService.savePlantName(getApplicationContext(), str, realLocation);
+        mPlantNames[realLocation] = str;
+        updateInfoText();
+    }
+
+    private void resetPlantName() {
+        PlantWatcherService.resetPlantNames(getApplicationContext());
+        mPlantNames = new String[PlantWatcherService.MAX_NUMBER_OF_PLANTS];
+        updateInfoText();
+    }
+
     final class H extends Handler {
-        public static final int SET_TEXT = 0;
+        public static final int SET_INFO_TEXT = 0;
         public static final int SET_DIVIDER_AND_INFO_POSITION = 1;
 
         @Override
         public void handleMessage(Message msg) {
             switch (msg.what) {
-                case SET_TEXT:
+                case SET_INFO_TEXT:
                     String[] str = (String[]) msg.obj;
                     if (str.length != 0 && str.length == mInfoViews.length) {
                         for (int i = 0; i < str.length; i++) {
