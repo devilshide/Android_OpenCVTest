@@ -18,7 +18,7 @@ public class PlantDBHandler extends SQLiteOpenHelper {
     public static final String TAG = "PlantDBHandler";
 
     public static final int DATABASE_VERSION = 5;
-    public static final String DATABASE_NAME = "PlantInfoTable";
+    public static final String DATABASE_NAME = "PlantInfoTable.db";
 
     public static final boolean DEBUG_PLANT_DB = true;
 
@@ -35,7 +35,8 @@ public class PlantDBHandler extends SQLiteOpenHelper {
 
 
     public PlantDBHandler(Context context) {
-        super(context, DATABASE_NAME, null, DATABASE_VERSION);
+//        super(context, DATABASE_NAME, null, DATABASE_VERSION);
+        super(context, "/mnt/sdcard/" + DATABASE_NAME, null, DATABASE_VERSION);
     }
 
     @Override

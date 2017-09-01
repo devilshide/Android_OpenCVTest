@@ -2,6 +2,7 @@ package proto.ttt.cds.green_data.Class;
 
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
+import android.hardware.camera2.CameraManager;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
@@ -33,17 +34,26 @@ public class CameraNoPreview {
     private static Camera mCam;
     private final H mH = new H();
 
-    private static final int[] openedCams = new int[CAMERA_NUM];
+    private final int[] openedCams = new int[CAMERA_NUM];
     private int mOpenCamIndex = -1;
-    private String mStoragePath;
+    private String mStoragePath, mFilePath;
 
     private ArrayList<ICameraCallback> listeners = new ArrayList<>();
+    private CameraNoPreview mCameraNoPreview;
 
-    public CameraNoPreview() {
+    private CameraNoPreview() {
         if (CAMERA_NUM < 1) {
             Log.d(TAG, "CameraNoPreview(): No available cameras");
             return;
         }
+        setStorageDir(null);
+    }
+
+    public CameraNoPreview getCameraNoPreview() {
+        if (mCameraNoPreview == null) {
+            mCameraNoPreview = new CameraNoPreview();
+        }
+        return mCameraNoPreview;
     }
 
     public CameraNoPreview(String storageDir) {
@@ -54,33 +64,20 @@ public class CameraNoPreview {
         setStorageDir(storageDir);
     }
 
-    public void openCamera() {
-        if (mOpenCamIndex == DEFAULT_CAM_INDEX ) {
-            Log.d(TAG, "openCamera(): DEFAULT CAM already opened");
-            return;
-        }
-
-        try {
-            mCam = Camera.open();
-            updateCameraStatus(DEFAULT_CAM_INDEX, true);
-            Log.d(TAG, "openCamera(): DEFAULT CAMERA opened");
-        } catch (RuntimeException e) {
-            Log.e(TAG, "openCamera(): Camera failed to open: " + e.getLocalizedMessage());
-        }
-    }
-
-    public void openCamera(int index) {
-        if (mOpenCamIndex == index ) {
-            Log.d(TAG, "openCamera(): CAMERA# " + index + " ALREADY OPENED!");
+    public void openCamera(int index, String caller) {
+        if (mCam != null) {
+            Log.d(TAG, "openCamera(): CAMERA# " + index + " ALREADY OPENED!, Caller = " + caller);
             return;
         }
 
         try {
             mCam = Camera.open(index);
             updateCameraStatus(index, true);
-            Log.d(TAG, "openCamera(): CAMERA# " + index + " opened");
+            Log.d(TAG, "openCamera(): CAMERA# " + index + " opened, Caller = " + caller);
         } catch (RuntimeException e) {
-            Log.e(TAG, "openCamera(): Camera failed to open: " + e.getLocalizedMessage());
+            Log.e(TAG, "openCamera(): Camera failed to open: " + e.getLocalizedMessage() +
+                    ", Caller = " + caller);
+            mH.obtainMessage(H.NOTIFY_CAMERA_ALREADY_IN_USE, index).sendToTarget();
         }
     }
 
@@ -120,18 +117,22 @@ public class CameraNoPreview {
         if (mStoragePath == null) {
             mStoragePath = DEFAULT_STORAGE_DIR.getAbsolutePath();
         }
-        String filePath = mStoragePath + "/" + name;
-        if (mCam != null) {
+        mFilePath = mStoragePath + "/" + name;
+        takePictureWithoutPreview();
+    }
+
+    private void takePictureWithoutPreview() {
+        if (mCam != null && mFilePath != null) {
             try {
                 mCam.setPreviewTexture(new SurfaceTexture(0));
                 mCam.startPreview();
-                mCam.takePicture(null, null, getJpegCallback(filePath));
-                Log.d(TAG, "takePictureWithoutPreview(): picture taken");
+                mCam.takePicture(null, null, getJpegCallback(mFilePath));
+                Log.d(TAG, "takePictureWithoutPreview(): PICTURE TAKEN");
             } catch (IOException e) {
                 e.printStackTrace();
             }
         } else {
-            Log.d(TAG, "takePictureWithoutPreview(): camera is NULL");
+            Log.d(TAG, "takePictureWithoutPreview(): camera is NULL, mCam = " + mCam + ", mFilePath = " + mFilePath);
         }
     }
 
@@ -148,7 +149,9 @@ public class CameraNoPreview {
                     mH.obtainMessage(H.NOTIFY_PICTURE_TAKEN, mOpenCamIndex).sendToTarget();
                 } catch (IOException e) {
                     e.printStackTrace();
+                    if (DEBUG_CAMERA) Log.d(TAG, "onPictureTaken(): IOException");
                 } finally {
+                    if (DEBUG_CAMERA) Log.d(TAG, "onPictureTaken(): close camera");
                     closeCamera();
                 }
             }
@@ -166,21 +169,30 @@ public class CameraNoPreview {
     }
 
     public interface ICameraCallback {
+        void onFailedToAccessOpenedCamera(int camIndex);
         void onCameraOpened(int camIndex);
         void onPictureTaken(int camIndex);
         void onCameraClosed(int camIndex);
     }
 
     final class H extends Handler {
-        public static final int NOTIFY_CAMERA_OPENED = 0;
-        public static final int NOTIFY_PICTURE_TAKEN = 1;
-        public static final int NOTIFY_CAMERA_CLOSED = 2;
+        public static final int NOTIFY_CAMERA_ALREADY_IN_USE = 0;
+        public static final int NOTIFY_CAMERA_OPENED = 1;
+        public static final int NOTIFY_PICTURE_TAKEN = 2;
+        public static final int NOTIFY_CAMERA_CLOSED = 3;
 
         @Override
         public void handleMessage(Message msg) {
             switch(msg.what) {
+                case NOTIFY_CAMERA_ALREADY_IN_USE: {
+                    int camIndex = (int) msg.obj;
+                    int size = listeners.size();
+                    for (int i = 0; i < size; i++) {
+                        listeners.get(i).onFailedToAccessOpenedCamera(camIndex);
+                    }
+                    break;
+                }
                 case NOTIFY_CAMERA_OPENED: {
-                    if (DEBUG_CAMERA) Log.d(TAG, "handleMessage(): NOTIFY_CAMERA_OPENED");
                     int camIndex = (int) msg.obj;
                     int size = listeners.size();
                     for (int i = 0; i < size; i++) {
@@ -189,7 +201,6 @@ public class CameraNoPreview {
                     break;
                 }
                 case NOTIFY_PICTURE_TAKEN: {
-                    if (DEBUG_CAMERA) Log.d(TAG, "handleMessage(): NOTIFY_PICTURE_TAKEN");
                     int camIndex = (int) msg.obj;
                     int size = listeners.size();
                     for (int i = 0; i < size; i++) {
@@ -198,7 +209,6 @@ public class CameraNoPreview {
                     break;
                 }
                 case NOTIFY_CAMERA_CLOSED: {
-                    if (DEBUG_CAMERA) Log.d(TAG, "handleMessage(): NOTIFY_CAMERA_CLOSED");
                     int camIndex = (int) msg.obj;
                     int size = listeners.size();
                     for (int i = 0; i < size; i++) {

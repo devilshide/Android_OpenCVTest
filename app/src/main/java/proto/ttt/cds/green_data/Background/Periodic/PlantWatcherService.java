@@ -6,13 +6,19 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Rect;
 import android.hardware.Camera;
+import android.hardware.camera2.CameraManager;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
 import android.os.Parcelable;
+import android.support.annotation.NonNull;
 import android.util.Log;
 
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.LinkedList;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 
 import proto.ttt.cds.green_data.Class.CameraNoPreview;
@@ -31,6 +37,7 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
 
     public static final boolean DEBUG = true;
     public static final String TAG = "PlantWatcherService";
+    private static final long TIMEOUT_MS = 5 * 1000;
 
     public static final String ACTION_GET_AREA = "calc_area";
     // DB  Access
@@ -64,6 +71,22 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
 
     private Context mContext;
     private String[] mPlantsName = new String[MAX_NUMBER_OF_PLANTS];
+    CameraManager mCameraManager;
+    CameraManager.AvailabilityCallback mCamAvailabilityCallback;
+    Queue<String> mCamPendingList = new LinkedList<String>();
+
+    private Handler mH = new Handler();
+    private int mCurrCameraId = -1;
+    private boolean mShouldRetakePicture = false;
+    private final Runnable mTimeoutRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (mShouldRetakePicture && !mCamPendingList.contains("" + mCurrCameraId)) {
+                Log.d(TAG, "mTimeoutRunnable()");
+                takePicture();
+            }
+        }
+    };
 
     @Override
     public void onCreate() {
@@ -76,6 +99,14 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
         mCam.registerCameraListener(this);
         mImageProcessor = new ImageProcessor();
         mDB = new PlantDBHandler(mContext);
+        mCameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+
+        for(int i=0; i<2; i++) {
+            mUnavailableCameras |= (i + 1);
+        }
+
+        mCameraManager.registerAvailabilityCallback(getCamAvailabilityCallback(),
+                new Handler(mContext.getMainLooper()));
 
         loadPlantNames(mContext, mPlantsName);
     }
@@ -84,6 +115,10 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
     public void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "onDestroy()");
+        if (mCam != null) {
+            mCam.closeCamera();
+        }
+        mCameraManager.unregisterAvailabilityCallback(mCamAvailabilityCallback);
     }
 
     @Override
@@ -119,7 +154,9 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
                             if (mNumOfPlants == 0) {
                                 mNumOfPlants = mSubAreaRect.length * mSubAreaRect[0].length;
                             }
-                            takePictureIfNeeded(0);
+
+                            mCurrCameraId = 0;
+                            takePicture();
                             break;
                     }
                 }
@@ -129,10 +166,64 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
         return Service.START_REDELIVER_INTENT;
     }
 
-    private void takePictureIfNeeded(int camId) {
-        if (camId >= 0 && camId < mNumOfCameras) {
-            mCam.openCamera(camId);
-            mCam.takePictureWithoutPreview(FILE_NAME);
+    private CameraManager.AvailabilityCallback getCamAvailabilityCallback() {
+        if (mCamAvailabilityCallback == null) {
+            mCamAvailabilityCallback = new CameraManager.AvailabilityCallback() {
+                @Override
+                public void onCameraAvailable(@NonNull String cameraId) {
+                    super.onCameraAvailable(cameraId);
+                    if (DEBUG) Log.d(TAG, "onCameraAvailable, id = " + cameraId);
+                    updateUnavailableCameras(cameraId, false);
+                    if (!mCamPendingList.isEmpty()) {
+                        mCurrCameraId = Integer.parseInt(mCamPendingList.poll());
+                        takePicture();
+                    }
+                }
+
+                @Override
+                public void onCameraUnavailable(@NonNull String cameraId) {
+                    super.onCameraUnavailable(cameraId);
+                    updateUnavailableCameras(cameraId, true);
+                    if (DEBUG) Log.d(TAG, "onCameraUnavailable, id = " + cameraId);
+
+                }
+            };
+        }
+        return mCamAvailabilityCallback;
+    }
+
+    private int mUnavailableCameras = 0x0;
+    private boolean isAllCameraReady() {
+        if (mUnavailableCameras == 0) {
+            if (DEBUG) Log.d(TAG, "isAllCameraReady(): ALL CAMERA READY!");
+            return true;
+        } else {
+            if (DEBUG) Log.d(TAG, "isAllCameraReady(): NOT READY -> " + mUnavailableCameras);
+            return false;
+        }
+    }
+
+    private void takePicture() {
+        if (mCurrCameraId >= 0 && mCurrCameraId < mNumOfCameras) {
+            if (isAllCameraReady()) {
+                mCam.openCamera(mCurrCameraId, TAG);
+                mCam.takePictureWithoutPreview(FILE_NAME);
+                mShouldRetakePicture = true;
+                mH.postDelayed(mTimeoutRunnable, TIMEOUT_MS);
+            } else {
+                Log.d(TAG, "takePicture() A CAMERA IN USE, ADD TO PENDING, camId = " + mCurrCameraId);
+                mCamPendingList.add("" + mCurrCameraId);
+            }
+        }
+    }
+
+    private void updateUnavailableCameras(String camId, boolean isUnavailable) {
+        if (isUnavailable) {
+            int openedCamHex = Integer.parseInt(camId, 16) + 1;
+            mUnavailableCameras |= openedCamHex;
+        } else {
+            int openedCamHex = Integer.parseInt(camId, 16) + 1;
+            mUnavailableCameras = mUnavailableCameras & ~openedCamHex;
         }
     }
 
@@ -143,6 +234,12 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
     }
 
     @Override
+    public void onFailedToAccessOpenedCamera(int camId) {
+        Log.d(TAG, "onFailedToAccessOpenedCamera() camId = " + camId);
+        mCamPendingList.add("" + camId);
+    }
+
+    @Override
     public void onCameraOpened(int camIndex) {
         if (DEBUG) Log.d(TAG, "onCameraOpened() camIndex = " + camIndex);
     }
@@ -150,9 +247,12 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
     @Override
     public void onCameraClosed(int camIndex) {
         if (DEBUG) Log.d(TAG, "onCameraClosed() camIndex = " + camIndex);
+
         switch(mAction) {
             case ACTION_GET_AREA:
-                takePictureIfNeeded(camIndex + 1);
+                mCurrCameraId = camIndex + 1;
+                takePicture();
+//                mCamPendingList.add("" + (camIndex+1));
                 break;
         }
     }
@@ -160,6 +260,7 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
     @Override
     public void onPictureTaken(int camId) {
         if (DEBUG) Log.d(TAG, "onPictureTaken() camIndex = " + camId);
+        mShouldRetakePicture = false;
         switch(mAction) {
             case ACTION_GET_AREA:
                 long currentTime = getCurrentTime();
@@ -197,7 +298,9 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
 
 //                mDB.getData(1); //test
                 printLogPlantData();
-                stopSelf();
+                if (camId == mNumOfCameras -1) {
+                    stopSelf();
+                }
                 break;
         }
 
