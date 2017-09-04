@@ -82,7 +82,8 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
         @Override
         public void run() {
             if (mShouldRetakePicture && !mCamPendingList.contains("" + mCurrCameraId)) {
-                Log.d(TAG, "mTimeoutRunnable()");
+                Log.d(TAG, "mTimeoutRunnable(): TIMED OUT, retaking picture, CAM_ID = " +
+                        mCurrCameraId);
                 takePicture();
             }
         }
@@ -206,10 +207,15 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
     private void takePicture() {
         if (mCurrCameraId >= 0 && mCurrCameraId < mNumOfCameras) {
             if (isAllCameraReady()) {
-                mCam.openCamera(mCurrCameraId, TAG);
-                mCam.takePictureWithoutPreview(FILE_NAME);
-                mShouldRetakePicture = true;
-                mH.postDelayed(mTimeoutRunnable, TIMEOUT_MS);
+                boolean isOpened = mCam.openCamera(mCurrCameraId, TAG);
+                if (isOpened) {
+                    mCam.takePictureWithoutPreview(FILE_NAME);
+                    mShouldRetakePicture = true;
+                    mH.postDelayed(mTimeoutRunnable, TIMEOUT_MS);
+                } else {
+                    Log.d(TAG, "takePicture() A CAMERA IS NULL, ADD TO PENDING, camId = " + mCurrCameraId);
+                    mCamPendingList.add("" + mCurrCameraId);
+                }
             } else {
                 Log.d(TAG, "takePicture() A CAMERA IN USE, ADD TO PENDING, camId = " + mCurrCameraId);
                 mCamPendingList.add("" + mCurrCameraId);

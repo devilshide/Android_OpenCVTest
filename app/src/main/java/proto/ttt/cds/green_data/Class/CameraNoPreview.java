@@ -64,15 +64,22 @@ public class CameraNoPreview {
         setStorageDir(storageDir);
     }
 
-    public void openCamera(int index, String caller) {
+    public boolean openCamera(int index, String caller) {
         try {
             mCam = Camera.open(index);
-            updateCameraStatus(index, true);
-            Log.d(TAG, "openCamera(): CAMERA# " + index + " opened, Caller = " + caller);
+            if (mCam != null) {
+                updateCameraStatus(index, true);
+                Log.d(TAG, "openCamera(): CAMERA# " + index + " opened, Caller = " + caller);
+                return true;
+            } else {
+                Log.d(TAG, "openCamera(): CAMERA# " + index + " is NULL");
+                return false;
+            }
         } catch (RuntimeException e) {
             Log.e(TAG, "openCamera(): Camera failed to open: " + e.getLocalizedMessage() +
                     ", Caller = " + caller);
             mH.obtainMessage(H.NOTIFY_CAMERA_ALREADY_IN_USE, index).sendToTarget();
+            return false;
         }
     }
 
@@ -133,6 +140,7 @@ public class CameraNoPreview {
 
     private Camera.PictureCallback getJpegCallback(String path) {
         final String filePath = path;
+        final int camIndex = mOpenCamIndex;
         Camera.PictureCallback jpeg = new Camera.PictureCallback() {
             @Override
             public void onPictureTaken(byte[] bytes, Camera camera) {
@@ -141,8 +149,8 @@ public class CameraNoPreview {
                     foStream.write(bytes);
                     foStream.close();
                     if (DEBUG_CAMERA) Log.d(TAG, "onPictureTaken(): files saved, path = " + filePath
-                            + ", openedCamIndex = " + mOpenCamIndex);
-                    mH.obtainMessage(H.NOTIFY_PICTURE_TAKEN, mOpenCamIndex).sendToTarget();
+                            + ", openedCamIndex = " + camIndex);
+                    mH.obtainMessage(H.NOTIFY_PICTURE_TAKEN, camIndex).sendToTarget();
                 } catch (IOException e) {
                     e.printStackTrace();
                     if (DEBUG_CAMERA) Log.d(TAG, "onPictureTaken(): IOException");

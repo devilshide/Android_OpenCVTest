@@ -74,7 +74,8 @@ public class MonitorActivity extends AppCompatActivity {
         @Override
         public void run() {
             if (mShouldRetakePicture && !mCamPendingList.contains("" + mCurrCameraId)) {
-                Log.d(TAG, "mTimeoutRunnable()");
+                Log.d(TAG, "mTimeoutRunnable(): TIMED OUT, retaking picture, CAM_ID = " +
+                        mCurrCameraId);
                 takePicture();
             }
         }
@@ -107,9 +108,6 @@ public class MonitorActivity extends AppCompatActivity {
         for(int i=0; i<CAMERA_NUM; i++) {
             mUnavailableCameras |= (i + 1);
         }
-
-        mCameraManager.registerAvailabilityCallback(getCamAvailabilityCallback(),
-                new Handler(this.getMainLooper()));
 
 //        CameraManager cm = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
 //        cm.getCameraIdList();
@@ -420,11 +418,16 @@ public class MonitorActivity extends AppCompatActivity {
     private void takePicture() {
         if (mCurrCameraId >= 0 && mCurrCameraId < CAMERA_NUM && mCurrCameraId < PREVIEW_NUM) {
             if (isAllCameraReady()) {
-                mCam.openCamera(mCurrCameraId, TAG);
-                mCam.takePictureWithoutPreview(getImageFileName(mCurrCameraId));
+                boolean isOpended = mCam.openCamera(mCurrCameraId, TAG);
+                if (isOpended) {
+                    mCam.takePictureWithoutPreview(getImageFileName(mCurrCameraId));
 
-                mShouldRetakePicture = true;
-                new Handler().postDelayed(mTimeoutRunnable, TIMEOUT_MS);
+                    mShouldRetakePicture = true;
+                    new Handler().postDelayed(mTimeoutRunnable, TIMEOUT_MS);
+                } else {
+                    Log.d(TAG, "takePicture() A CAMERA IS NULL, ADD TO PENDING, camId = " + mCurrCameraId);
+                    mCamPendingList.add("" + mCurrCameraId);
+                }
             } else {
                 Log.d(TAG, "takePicture() A CAMERA IN USE, ADD TO PENDING, camId = " + mCurrCameraId);
                 mCamPendingList.add("" + mCurrCameraId);
@@ -452,19 +455,22 @@ public class MonitorActivity extends AppCompatActivity {
         if (mCam != null) {
             mCam.closeCamera();
         }
+        mCameraManager.unregisterAvailabilityCallback(mCamAvailabilityCallback);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "onDestroy");
-        mCameraManager.unregisterAvailabilityCallback(mCamAvailabilityCallback);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         Log.d(TAG, "onResume");
+
+        mCameraManager.registerAvailabilityCallback(getCamAvailabilityCallback(),
+                new Handler(this.getMainLooper()));
         mCamPendingList.add("" + 0);
     }
 
