@@ -10,7 +10,7 @@
     <LinearLayout
         android:id="@+id/previews"
         android:layout_width="wrap_content"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
@@ -193,12 +193,11 @@
     <TextView
         android:id="@+id/divider_2_0"
         android:layout_width="2dp"
-        android:layout_height="match_parent"
+        android:layout_height="295dp"
         android:background="#0000ff"
         android:tag="realDivider"
-        app:layout_constraintLeft_toRightOf="@id/previews"
-        tools:layout_editor_absoluteY="8dp"
-        tools:layout_editor_absoluteX="0dp" />
+        app:layout_constraintLeft_toRightOf="@+id/previews"
+        tools:layout_editor_absoluteY="8dp" />
 
 
 
@@ -214,7 +213,6 @@
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintVertical_bias="0.949"
-        app:layout_constraintHorizontal_bias="0.5"
         android:layout_marginTop="8dp"
         android:layout_marginLeft="8dp"
         android:layout_marginRight="8dp">

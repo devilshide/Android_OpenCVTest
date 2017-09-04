@@ -9,7 +9,7 @@
 
     <LinearLayout
         android:id="@+id/previews"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
@@ -18,12 +18,12 @@
         android:orientation="vertical">
 
         <RelativeLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_weight="1">
             <ImageView
                 android:id="@+id/imgPreview1"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:adjustViewBounds="true"/>
             <LinearLayout
@@ -101,12 +101,12 @@
         </RelativeLayout>
 
         <RelativeLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_weight="1">
             <ImageView
                 android:id="@+id/imgPreview2"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:adjustViewBounds="true"/>
             <LinearLayout
@@ -193,7 +193,7 @@
     <TextView
         android:id="@+id/divider_2_0"
         android:layout_width="2dp"
-        android:layout_height="0dp"
+        android:layout_height="match_parent"
         android:background="#0000ff"
         android:tag="realDivider"
         app:layout_constraintLeft_toRightOf="@+id/previews"

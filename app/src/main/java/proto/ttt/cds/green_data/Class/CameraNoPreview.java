@@ -65,11 +65,6 @@ public class CameraNoPreview {
     }
 
     public void openCamera(int index, String caller) {
-        if (mCam != null) {
-            Log.d(TAG, "openCamera(): CAMERA# " + index + " ALREADY OPENED!, Caller = " + caller);
-            return;
-        }
-
         try {
             mCam = Camera.open(index);
             updateCameraStatus(index, true);
@@ -145,7 +140,8 @@ public class CameraNoPreview {
                     FileOutputStream foStream = new FileOutputStream(new File(filePath));
                     foStream.write(bytes);
                     foStream.close();
-                    if (DEBUG_CAMERA) Log.d(TAG, "onPictureTaken(): files saved, path = " + filePath);
+                    if (DEBUG_CAMERA) Log.d(TAG, "onPictureTaken(): files saved, path = " + filePath
+                            + ", openedCamIndex = " + mOpenCamIndex);
                     mH.obtainMessage(H.NOTIFY_PICTURE_TAKEN, mOpenCamIndex).sendToTarget();
                 } catch (IOException e) {
                     e.printStackTrace();

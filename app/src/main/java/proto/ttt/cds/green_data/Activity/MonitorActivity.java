@@ -223,11 +223,12 @@ public class MonitorActivity extends AppCompatActivity {
         for (int i=0; i<mPrevImageView.length; i++) {
             int resId = getResources().getIdentifier("imgPreview"+(i+1), "id", getPackageName());
             mPrevImageView[i] = (ImageView) findViewById(resId);
-            mCurrCameraId = i;
+            final int camId = i;
             if (mPrevImageView[i] != null) {
                 mPrevImageView[i].setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
+                        mCurrCameraId = camId;
                         takePicture();
                     }
                 });
