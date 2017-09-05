@@ -2,7 +2,6 @@ package proto.ttt.cds.green_data.Class;
 
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
-import android.hardware.camera2.CameraManager;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
@@ -36,7 +35,8 @@ public class CameraNoPreview {
 
     private final int[] openedCams = new int[CAMERA_NUM];
     private int mOpenCamIndex = -1;
-    private String mStoragePath, mFilePath;
+//    private String mStoragePath, mFilePath;
+    private String mStoragePath;
 
     private ArrayList<ICameraCallback> listeners = new ArrayList<>();
     private CameraNoPreview mCameraNoPreview;
@@ -46,7 +46,7 @@ public class CameraNoPreview {
             Log.d(TAG, "CameraNoPreview(): No available cameras");
             return;
         }
-        setStorageDir(null);
+        setStoragePath(null);
     }
 
     public CameraNoPreview getCameraNoPreview() {
@@ -61,7 +61,7 @@ public class CameraNoPreview {
             Log.d(TAG, "CameraNoPreview(): No available cameras");
             return;
         }
-        setStorageDir(storageDir);
+        setStoragePath(storageDir);
     }
 
     public boolean openCamera(int index, String caller) {
@@ -111,30 +111,30 @@ public class CameraNoPreview {
         }
     }
 
-    public void setStorageDir(String storageDir) {
+    public void setStoragePath(String storageDir) {
         mStoragePath = storageDir != null ? storageDir : DEFAULT_STORAGE_DIR.getPath();
     }
 
-    public void takePictureWithoutPreview(@NonNull String name) {
+    public void takePicture(@NonNull String name) {
         if (mStoragePath == null) {
             mStoragePath = DEFAULT_STORAGE_DIR.getAbsolutePath();
         }
-        mFilePath = mStoragePath + "/" + name;
-        takePictureWithoutPreview();
+//        mFilePath = mStoragePath + "/" + name;
+        takePictureWithoutPreview(mStoragePath + "/" + name);
     }
 
-    private void takePictureWithoutPreview() {
-        if (mCam != null && mFilePath != null) {
+    private void takePictureWithoutPreview(String filePath) {
+        if (mCam != null && filePath != null) {
             try {
                 mCam.setPreviewTexture(new SurfaceTexture(0));
                 mCam.startPreview();
-                mCam.takePicture(null, null, getJpegCallback(mFilePath));
-                Log.d(TAG, "takePictureWithoutPreview(): PICTURE TAKEN");
+                mCam.takePicture(null, null, getJpegCallback(filePath));
+                Log.d(TAG, "takePicture(): PICTURE TAKEN");
             } catch (IOException e) {
                 e.printStackTrace();
             }
         } else {
-            Log.d(TAG, "takePictureWithoutPreview(): camera is NULL, mCam = " + mCam + ", mFilePath = " + mFilePath);
+            Log.d(TAG, "takePicture(): camera is NULL, mCam = " + mCam + ", filePath = " + filePath);
         }
     }
 
@@ -168,7 +168,7 @@ public class CameraNoPreview {
         listeners.add(listener);
     }
 
-    public String getStorageDirectory() {
+    public String getStoragePath() {
         return mStoragePath;
     }
 

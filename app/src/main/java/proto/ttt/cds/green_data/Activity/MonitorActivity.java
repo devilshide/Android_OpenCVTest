@@ -8,10 +8,8 @@ import android.content.Intent;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.hardware.Camera;
-import android.hardware.camera2.CameraManager;
 import android.os.Handler;
 import android.os.Message;
-import android.support.annotation.NonNull;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -27,24 +25,23 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.util.LinkedList;
-import java.util.Queue;
-
 import proto.ttt.cds.green_data.Background.Periodic.MyAlarmReceiver;
 import proto.ttt.cds.green_data.Background.Periodic.PlantWatcherService;
 import proto.ttt.cds.green_data.Class.CameraNoPreview;
+import proto.ttt.cds.green_data.Class.SequencePictureTaker;
 import proto.ttt.cds.green_data.Database.PlantDBHandler;
 import proto.ttt.cds.green_data.R;
 
 public class MonitorActivity extends AppCompatActivity {
-    static final boolean DEBUG = true;
+    private static final boolean DEBUG = true;
+    private static final String FILE_NAME = "MonitorPrevImage";
+
     public static final String TAG = "MonitorActivity";
 
     public static final int PLANTS_NUM = 6;
     public static final int PREVIEW_NUM = 2;
     public static final int PLANTS_NUM_IN_PREVIEW = PLANTS_NUM / PREVIEW_NUM;
     public static final int CAMERA_NUM = Camera.getNumberOfCameras();
-    private static final long TIMEOUT_MS = 5 * 1000;
 
     private TextView mInfoViews[] = new TextView[PLANTS_NUM];
     private String mInfoTextString[] = new String[PLANTS_NUM]; // Names of plants for each location respectively
@@ -59,26 +56,9 @@ public class MonitorActivity extends AppCompatActivity {
 
     private ImageView[] mPrevImageView = new ImageView[PREVIEW_NUM];
     private Rect[] mPrevRect = new Rect[PREVIEW_NUM];
-    private CameraNoPreview mCam;
-
     private String[] mPlantNames = new String[PlantWatcherService.MAX_NUMBER_OF_PLANTS];
-    CameraManager mCameraManager;
-    CameraManager.AvailabilityCallback mCamAvailabilityCallback;
-    Queue<String> mCamPendingList = new LinkedList<String>();
-    private int mUnavailableCameras = 0x0;  // Flag to check whether there's a opened camera, for convenience sake, cam indexes are stored as +1 value
 
-    private int mCurrCameraId = -1;
-    private boolean mShouldRetakePicture = false;
-    private final Runnable mTimeoutRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (mShouldRetakePicture && !mCamPendingList.contains("" + mCurrCameraId)) {
-                Log.d(TAG, "mTimeoutRunnable(): TIMED OUT, retaking picture, CAM_ID = " +
-                        mCurrCameraId);
-                takePicture();
-            }
-        }
-    };
+    private SequencePictureTaker mPictureTaker;
 
     public MonitorActivity() {}
 
@@ -98,60 +78,45 @@ public class MonitorActivity extends AppCompatActivity {
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
         updateConfigForOrientationChange();
 
-        mCameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
-        mCam = new CameraNoPreview(null);
         setStationaryIndexes();
-
         initViews();
-        initCamera();
-        for(int i=0; i<CAMERA_NUM; i++) {
-            mUnavailableCameras |= (i + 1);
-        }
 
-//        CameraManager cm = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
-//        cm.getCameraIdList();
-//        PlantWatcherService.resetPlantNames(this);
-//        PlantWatcherService.savePlantName(this, "canary", 0);
-//        PlantWatcherService.savePlantName(this, "rose", 1);
-//        PlantWatcherService.savePlantName(this, "lettuce", 2);
+        createSequencePictureTaker();
+
         PlantWatcherService.loadPlantNames(this, mPlantNames);
     }
 
-    private CameraManager.AvailabilityCallback getCamAvailabilityCallback() {
-        if (mCamAvailabilityCallback == null) {
-            mCamAvailabilityCallback = new CameraManager.AvailabilityCallback() {
-                @Override
-                public void onCameraAvailable(@NonNull String cameraId) {
-                    super.onCameraAvailable(cameraId);
-                    Log.d(TAG, "onCameraAvailable, id = " + cameraId);
+    private void createSequencePictureTaker() {
+        mPictureTaker = new SequencePictureTaker(this, FILE_NAME, TAG) {
+            @Override
+            public void onFailedToAccessOpenedCameraCB(int camId) {}
 
-                    updateUnavailableCameras("" + cameraId, false);
-                    if (!mCamPendingList.isEmpty()) {
-                        String nextCamId = mCamPendingList.poll();
-                        mCurrCameraId = Integer.parseInt(nextCamId);
-                        takePicture();
-                    }
+            @Override
+            public void onCameraOpenedCB(int camId) {}
+
+            @Override
+            public void onPictureTakenCB(int camId) {
+                String path = this.getPicturePath(camId);
+                Drawable d = Drawable.createFromPath(path);
+
+                if (d != null && mPrevImageView[camId] != null && mPrevRect[camId] != null) {
+                    final int id = camId;
+                    mPrevImageView[id].setImageDrawable(d);
+                    mPrevImageView[id].setScaleType(ImageView.ScaleType.FIT_XY);
+                    mPrevImageView[id].addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+                        @Override
+                        public void onLayoutChange(View view, int i, int i1, int i2, int i3, int i4, int i5, int i6, int i7) {
+                            mPrevRect[id].set(i, i1, i2, i3);
+                            calcDividerDefaultPosForPrev(id, i, i2);
+                        }
+                    });
+                    updateInfoText();
                 }
+            }
 
-                @Override
-                public void onCameraUnavailable(@NonNull String cameraId) {
-                    super.onCameraUnavailable(cameraId);
-                    Log.d(TAG, "onCameraUnavailable, id = " + cameraId);
-                    updateUnavailableCameras("" + cameraId, true);
-                }
-            };
-        }
-        return mCamAvailabilityCallback;
-    }
-
-    private boolean isAllCameraReady() {
-        if (mUnavailableCameras == 0) {
-            if (DEBUG) Log.d(TAG, "isAllCameraReady(): ALL CAMERA READY!");
-            return true;
-        } else {
-            if (DEBUG) Log.d(TAG, "isAllCameraReady(): NOT READY! -> " + mUnavailableCameras);
-            return false;
-        }
+            @Override
+            public void onCameraClosedCB(int camId) {}
+        };
     }
 
     private boolean isStationaryDivIndex(int y, int x) {
@@ -252,8 +217,7 @@ public class MonitorActivity extends AppCompatActivity {
                 mPrevImageView[i].setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
-                        mCurrCameraId = camId;
-                        takePicture();
+                        mPictureTaker.takePictureStart();
                     }
                 });
             }
@@ -374,93 +338,6 @@ public class MonitorActivity extends AppCompatActivity {
         return divider.findViewWithTag(tag).getX();
     }
 
-    private void initCamera() {
-        Log.d(TAG, "initCamera()");
-        if (mCam != null) {
-            mCam.registerCameraListener(new CameraNoPreview.ICameraCallback() {
-                @Override
-                public void onFailedToAccessOpenedCamera(int camId) {
-                    Log.d(TAG, "onFailedToAccessOpenedCamera() camId = " + camId);
-                    synchronized (mCamPendingList) {
-                        mCamPendingList.add("" + camId);
-                    }
-                }
-
-                @Override
-                public void onCameraOpened(int camId) {
-                    Log.d(TAG, "onCameraOpened() camId = " + camId);
-                }
-
-                @Override
-                public void onPictureTaken(int camId) {
-                    Log.d(TAG, "onPictureTaken() camId = " + camId);
-
-                    mShouldRetakePicture = false;
-
-                    String path = CameraNoPreview.DEFAULT_STORAGE_DIR.getAbsolutePath() + "/"
-                            + getImageFileName(camId);
-                    Drawable d = Drawable.createFromPath(path);
-
-                    if (d != null && mPrevImageView[camId] != null && mPrevRect[camId] != null) {
-                        final int id = camId;
-                        mPrevImageView[id].setImageDrawable(d);
-                        mPrevImageView[id].setScaleType(ImageView.ScaleType.FIT_XY);
-                        mPrevImageView[id].addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
-                            @Override
-                            public void onLayoutChange(View view, int i, int i1, int i2, int i3, int i4, int i5, int i6, int i7) {
-                                mPrevRect[id].set(i, i1, i2, i3);
-                                calcDividerDefaultPosForPrev(id, i, i2);
-                            }
-                        });
-                        updateInfoText();
-                    }
-                }
-
-                @Override
-                public void onCameraClosed(int camId) {
-                    Log.d(TAG, "onCameraClosed() camId = " + camId);
-                    mCurrCameraId = camId + 1;
-                    takePicture();
-                }
-            });
-        }
-    }
-
-    private String getImageFileName(int camId) {
-        return "prevImg" + camId + ".jpeg";
-    }
-
-
-    private void updateUnavailableCameras(String camId, boolean isUnavailable) {
-        if (isUnavailable) {
-            int openedCamHex = Integer.parseInt(camId, 16) + 1;
-            mUnavailableCameras |= openedCamHex;
-        } else {
-            int openedCamHex = Integer.parseInt(camId, 16) + 1;
-            mUnavailableCameras = mUnavailableCameras & ~openedCamHex;
-        }
-    }
-
-    private void takePicture() {
-        if (mCurrCameraId >= 0 && mCurrCameraId < CAMERA_NUM && mCurrCameraId < PREVIEW_NUM) {
-            if (isAllCameraReady()) {
-                boolean isOpen = mCam.openCamera(mCurrCameraId, TAG);
-                if (isOpen) {
-                    mCam.takePictureWithoutPreview(getImageFileName(mCurrCameraId));
-
-                    mShouldRetakePicture = true;
-                    new Handler().postDelayed(mTimeoutRunnable, TIMEOUT_MS);
-                } else {
-                    Log.d(TAG, "takePicture() A CAMERA IS NULL, ADD TO PENDING, camId = " + mCurrCameraId);
-                    mCamPendingList.add("" + mCurrCameraId);
-                }
-            } else {
-                Log.d(TAG, "takePicture() A CAMERA IN USE, ADD TO PENDING, camId = " + mCurrCameraId);
-                mCamPendingList.add("" + mCurrCameraId);
-            }
-        }
-    }
-
     private void scheduleAlarm() {
         createPlantWatcherIntentIfNeeded();
         AlarmManager alarmManager = (AlarmManager) this.getSystemService(Context.ALARM_SERVICE);
@@ -489,10 +366,7 @@ public class MonitorActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         Log.d(TAG, "onPause");
-        if (mCam != null) {
-            mCam.closeCamera();
-        }
-        mCameraManager.unregisterAvailabilityCallback(mCamAvailabilityCallback);
+        mPictureTaker.closeCamera();
     }
 
     @Override
@@ -506,9 +380,8 @@ public class MonitorActivity extends AppCompatActivity {
         super.onResume();
         Log.d(TAG, "onResume");
 
-        mCameraManager.registerAvailabilityCallback(getCamAvailabilityCallback(),
-                new Handler(this.getMainLooper()));
-        mCamPendingList.add("" + 0);
+        mPictureTaker.initCallbacks();
+        mPictureTaker.takePictureStart();
     }
 
     private void calcDividerDefaultPosForPrev(int camId, int left, int right) {

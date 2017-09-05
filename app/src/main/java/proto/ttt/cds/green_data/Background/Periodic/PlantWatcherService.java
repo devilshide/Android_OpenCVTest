@@ -14,7 +14,6 @@ import android.os.Parcelable;
 import android.support.annotation.NonNull;
 import android.util.Log;
 
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.Map;
@@ -24,6 +23,7 @@ import java.util.Set;
 import proto.ttt.cds.green_data.Class.CameraNoPreview;
 import proto.ttt.cds.green_data.Class.ImageProcessor;
 import proto.ttt.cds.green_data.Class.PlantData;
+import proto.ttt.cds.green_data.Class.SequencePictureTaker;
 import proto.ttt.cds.green_data.Database.PlantDBHandler;
 
 /**
@@ -33,17 +33,14 @@ import proto.ttt.cds.green_data.Database.PlantDBHandler;
  *
  */
 
-public class PlantWatcherService extends Service implements CameraNoPreview.ICameraCallback {
+public class PlantWatcherService extends Service {
 
-    public static final boolean DEBUG = true;
+    private static final boolean DEBUG = true;
     public static final String TAG = "PlantWatcherService";
-    private static final long TIMEOUT_MS = 5 * 1000;
 
     public static final String ACTION_GET_AREA = "calc_area";
     // DB  Access
-    public static final String FILE_STORAGE_DIR = CameraNoPreview.DEFAULT_STORAGE_DIR.getAbsolutePath();
-    public static final String FILE_NAME = "plantCam.jpeg";
-    public static final String IMG_DIR = FILE_STORAGE_DIR + "/" + FILE_NAME;
+    private static final String FILE_NAME = "plantWatcher";
     public static final String SHARED_PREF_PLANT = "plantsName";
     // System values
     public static final int MAX_NUMBER_OF_PLANTS = 6;
@@ -56,7 +53,6 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
 
     private static final int BIGGEST_CONTOUR_INDEX = 0;
 
-    private CameraNoPreview mCam;
     private ImageProcessor mImageProcessor;
     private PlantDBHandler mDB;
 
@@ -71,23 +67,9 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
 
     private Context mContext;
     private String[] mPlantsName = new String[MAX_NUMBER_OF_PLANTS];
-    CameraManager mCameraManager;
-    CameraManager.AvailabilityCallback mCamAvailabilityCallback;
-    Queue<String> mCamPendingList = new LinkedList<String>();
 
-    private Handler mH = new Handler();
-    private int mCurrCameraId = -1;
-    private boolean mShouldRetakePicture = false;
-    private final Runnable mTimeoutRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (mShouldRetakePicture && !mCamPendingList.contains("" + mCurrCameraId)) {
-                Log.d(TAG, "mTimeoutRunnable(): TIMED OUT, retaking picture, CAM_ID = " +
-                        mCurrCameraId);
-                takePicture();
-            }
-        }
-    };
+
+    private SequencePictureTaker mPictureTaker;
 
     @Override
     public void onCreate() {
@@ -96,30 +78,76 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
         mNumOfCameras = Camera.getNumberOfCameras();
         mContext = getApplicationContext();
 
-        mCam = new CameraNoPreview(FILE_STORAGE_DIR);
-        mCam.registerCameraListener(this);
         mImageProcessor = new ImageProcessor();
         mDB = new PlantDBHandler(mContext);
-        mCameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
 
-        for(int i=0; i<2; i++) {
-            mUnavailableCameras |= (i + 1);
-        }
-
-        mCameraManager.registerAvailabilityCallback(getCamAvailabilityCallback(),
-                new Handler(mContext.getMainLooper()));
-
+        createSequencePictureTaker();
         loadPlantNames(mContext, mPlantsName);
+    }
+
+    private void createSequencePictureTaker() {
+        mPictureTaker = new SequencePictureTaker(mContext, FILE_NAME, TAG) {
+            @Override
+            public void onFailedToAccessOpenedCameraCB(int camId) {}
+
+            @Override
+            public void onCameraOpenedCB(int camId) {}
+
+            @Override
+            public void onPictureTakenCB(int camId) {
+                switch(mAction) {
+                    case ACTION_GET_AREA:
+                        long currentTime = getCurrentTime();
+                        double[][] contours = mImageProcessor.getBiggestContoursFromImg(this.getPicturePath(camId),
+                                mSubAreaRect[camId], mPreviewRect[camId], mNumOfContours);
+
+                        if (contours == null) {
+                            return;
+                        }
+
+                        if (DEBUG) {
+                            for (int i=0; i<contours.length; i++) {
+                                for (int j=0; j<contours[0].length; j++) {
+                                    Log.d(TAG, "onPictureTaken(): contour[" + i + "][" + j + "] = " + contours[i][j]);
+                                }
+                            }
+                        }
+
+                        // Get the # number of the biggest contours in each sub section
+                        synchronized (this) {
+                            int smallestContourIndex = mNumOfContours - 1;
+                            int subAreaCnt = contours[0].length;
+                            for (int order=BIGGEST_CONTOUR_INDEX; order<=smallestContourIndex; order++) {
+                                for (int loc=0; loc<subAreaCnt; loc++) {
+                                    int realLoc = (camId * subAreaCnt) + loc;
+                                    String name = getPlant(realLoc);
+                                    if (name != null) {
+                                        double areaSize = contours[order][loc];
+                                        PlantData plant = new PlantData(realLoc, name, order, areaSize, currentTime);
+                                        mDB.insertData(plant);
+                                    }
+                                }
+                            }
+                        }
+
+                        printLogPlantData();
+                        if (camId == mNumOfCameras -1) {
+                            stopSelf();
+                        }
+                        break;
+                }
+            }
+
+            @Override
+            public void onCameraClosedCB(int camId) {}
+        };
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "onDestroy()");
-        if (mCam != null) {
-            mCam.closeCamera();
-        }
-        mCameraManager.unregisterAvailabilityCallback(mCamAvailabilityCallback);
+        mPictureTaker.closeCamera();
     }
 
     @Override
@@ -156,8 +184,8 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
                                 mNumOfPlants = mSubAreaRect.length * mSubAreaRect[0].length;
                             }
 
-                            mCurrCameraId = 0;
-                            takePicture();
+                            mPictureTaker.initCallbacks();
+                            mPictureTaker.takePictureStart();
                             break;
                     }
                 }
@@ -167,149 +195,10 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
         return Service.START_REDELIVER_INTENT;
     }
 
-    private CameraManager.AvailabilityCallback getCamAvailabilityCallback() {
-        if (mCamAvailabilityCallback == null) {
-            mCamAvailabilityCallback = new CameraManager.AvailabilityCallback() {
-                @Override
-                public void onCameraAvailable(@NonNull String cameraId) {
-                    super.onCameraAvailable(cameraId);
-                    if (DEBUG) Log.d(TAG, "onCameraAvailable, id = " + cameraId);
-                    updateUnavailableCameras(cameraId, false);
-                    if (!mCamPendingList.isEmpty()) {
-                        mCurrCameraId = Integer.parseInt(mCamPendingList.poll());
-                        takePicture();
-                    }
-                }
-
-                @Override
-                public void onCameraUnavailable(@NonNull String cameraId) {
-                    super.onCameraUnavailable(cameraId);
-                    updateUnavailableCameras(cameraId, true);
-                    if (DEBUG) Log.d(TAG, "onCameraUnavailable, id = " + cameraId);
-
-                }
-            };
-        }
-        return mCamAvailabilityCallback;
-    }
-
-    private int mUnavailableCameras = 0x0;
-    private boolean isAllCameraReady() {
-        if (mUnavailableCameras == 0) {
-            if (DEBUG) Log.d(TAG, "isAllCameraReady(): ALL CAMERA READY!");
-            return true;
-        } else {
-            if (DEBUG) Log.d(TAG, "isAllCameraReady(): NOT READY -> " + mUnavailableCameras);
-            return false;
-        }
-    }
-
-    private void takePicture() {
-        if (mCurrCameraId >= 0 && mCurrCameraId < mNumOfCameras) {
-            if (isAllCameraReady()) {
-                boolean isOpen = mCam.openCamera(mCurrCameraId, TAG);
-                if (isOpen) {
-                    mCam.takePictureWithoutPreview(FILE_NAME);
-                    mShouldRetakePicture = true;
-                    mH.postDelayed(mTimeoutRunnable, TIMEOUT_MS);
-                } else {
-                    Log.d(TAG, "takePicture() A CAMERA IS NULL, ADD TO PENDING, camId = " + mCurrCameraId);
-                    mCamPendingList.add("" + mCurrCameraId);
-                }
-            } else {
-                Log.d(TAG, "takePicture() A CAMERA IN USE, ADD TO PENDING, camId = " + mCurrCameraId);
-                mCamPendingList.add("" + mCurrCameraId);
-            }
-        }
-    }
-
-    private void updateUnavailableCameras(String camId, boolean isUnavailable) {
-        if (isUnavailable) {
-            int openedCamHex = Integer.parseInt(camId, 16) + 1;
-            mUnavailableCameras |= openedCamHex;
-        } else {
-            int openedCamHex = Integer.parseInt(camId, 16) + 1;
-            mUnavailableCameras = mUnavailableCameras & ~openedCamHex;
-        }
-    }
-
     @Override
     public IBinder onBind(Intent arg0) {
         Log.d(TAG, "onBind()");
         return null;
-    }
-
-    @Override
-    public void onFailedToAccessOpenedCamera(int camId) {
-        Log.d(TAG, "onFailedToAccessOpenedCamera() camId = " + camId);
-        mCamPendingList.add("" + camId);
-    }
-
-    @Override
-    public void onCameraOpened(int camIndex) {
-        if (DEBUG) Log.d(TAG, "onCameraOpened() camIndex = " + camIndex);
-    }
-
-    @Override
-    public void onCameraClosed(int camIndex) {
-        if (DEBUG) Log.d(TAG, "onCameraClosed() camIndex = " + camIndex);
-
-        switch(mAction) {
-            case ACTION_GET_AREA:
-                mCurrCameraId = camIndex + 1;
-                takePicture();
-//                mCamPendingList.add("" + (camIndex+1));
-                break;
-        }
-    }
-
-    @Override
-    public void onPictureTaken(int camId) {
-        if (DEBUG) Log.d(TAG, "onPictureTaken() camIndex = " + camId);
-        mShouldRetakePicture = false;
-        switch(mAction) {
-            case ACTION_GET_AREA:
-                long currentTime = getCurrentTime();
-                double[][] contours = mImageProcessor.getBiggestContoursFromImg(IMG_DIR,
-                        mSubAreaRect[camId], mPreviewRect[camId], mNumOfContours);
-
-                if (contours == null) {
-                    return;
-                }
-
-                if (DEBUG) {
-                    for (int i=0; i<contours.length; i++) {
-                        for (int j=0; j<contours[0].length; j++) {
-                            Log.d(TAG, "onPictureTaken(): contour[" + i + "][" + j + "] = " + contours[i][j]);
-                        }
-                    }
-                }
-
-                // Get the # number of the biggest contours in each sub section
-                synchronized (this) {
-                    int smallestContourIndex = mNumOfContours - 1;
-                    int subAreaCnt = contours[0].length;
-                    for (int order=BIGGEST_CONTOUR_INDEX; order<=smallestContourIndex; order++) {
-                        for (int loc=0; loc<subAreaCnt; loc++) {
-                            int realLoc = (camId * subAreaCnt) + loc;
-                            String name = getPlant(realLoc);
-                            if (name != null) {
-                                double areaSize = contours[order][loc];
-                                PlantData plant = new PlantData(realLoc, name, order, areaSize, currentTime);
-                                mDB.insertData(plant);
-                            }
-                        }
-                    }
-                }
-
-//                mDB.getData(1); //test
-                printLogPlantData();
-                if (camId == mNumOfCameras -1) {
-                    stopSelf();
-                }
-                break;
-        }
-
     }
 
     public void printLogPlantData() {
