@@ -6,21 +6,15 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Rect;
 import android.hardware.Camera;
-import android.hardware.camera2.CameraManager;
 import android.os.Bundle;
-import android.os.Handler;
 import android.os.IBinder;
 import android.os.Parcelable;
-import android.support.annotation.NonNull;
 import android.util.Log;
 
 import java.util.Calendar;
-import java.util.LinkedList;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Set;
 
-import proto.ttt.cds.green_data.Class.CameraNoPreview;
 import proto.ttt.cds.green_data.Class.ImageProcessor;
 import proto.ttt.cds.green_data.Class.PlantData;
 import proto.ttt.cds.green_data.Class.SequencePictureTaker;
@@ -147,7 +141,7 @@ public class PlantWatcherService extends Service {
     public void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "onDestroy()");
-        mPictureTaker.closeCamera();
+        mPictureTaker.stop();
     }
 
     @Override

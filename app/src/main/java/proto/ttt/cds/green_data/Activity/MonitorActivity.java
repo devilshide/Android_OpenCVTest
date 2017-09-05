@@ -27,7 +27,6 @@ import android.widget.Toast;
 
 import proto.ttt.cds.green_data.Background.Periodic.MyAlarmReceiver;
 import proto.ttt.cds.green_data.Background.Periodic.PlantWatcherService;
-import proto.ttt.cds.green_data.Class.CameraNoPreview;
 import proto.ttt.cds.green_data.Class.SequencePictureTaker;
 import proto.ttt.cds.green_data.Database.PlantDBHandler;
 import proto.ttt.cds.green_data.R;
@@ -366,7 +365,7 @@ public class MonitorActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         Log.d(TAG, "onPause");
-        mPictureTaker.closeCamera();
+        mPictureTaker.stop();
     }
 
     @Override

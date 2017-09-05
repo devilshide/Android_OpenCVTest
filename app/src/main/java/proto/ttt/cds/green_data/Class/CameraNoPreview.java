@@ -33,9 +33,7 @@ public class CameraNoPreview {
     private static Camera mCam;
     private final H mH = new H();
 
-    private final int[] openedCams = new int[CAMERA_NUM];
     private int mOpenCamIndex = -1;
-//    private String mStoragePath, mFilePath;
     private String mStoragePath;
 
     private ArrayList<ICameraCallback> listeners = new ArrayList<>();
@@ -102,11 +100,9 @@ public class CameraNoPreview {
 
         if (isOpened) {
             mOpenCamIndex = camId;
-            openedCams[camId] = 1;
             mH.obtainMessage(H.NOTIFY_CAMERA_OPENED, camId).sendToTarget();
         } else {
             mOpenCamIndex = INVALID_CAM_INDEX;
-            openedCams[camId] = 0;
             mH.obtainMessage(H.NOTIFY_CAMERA_CLOSED, camId).sendToTarget();
         }
     }
@@ -119,7 +115,6 @@ public class CameraNoPreview {
         if (mStoragePath == null) {
             mStoragePath = DEFAULT_STORAGE_DIR.getAbsolutePath();
         }
-//        mFilePath = mStoragePath + "/" + name;
         takePictureWithoutPreview(mStoragePath + "/" + name);
     }
 
