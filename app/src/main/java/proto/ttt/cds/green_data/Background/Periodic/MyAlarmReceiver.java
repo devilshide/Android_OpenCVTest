@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 
 /**
  * Created by changdo on 17. 8. 2.
@@ -13,9 +14,12 @@ import android.os.Bundle;
 
 public class MyAlarmReceiver extends BroadcastReceiver {
 
-    public static final int REQUEST_CODE = 9999;
+    public static final int REQUEST_CODE_WATCH_PLANT = 9999;
+    public static final int REQUEST_CODE_WATCH_YELLOW = 9998;
+    public static final String TAG = "MyAlarmReceiver";
 
     public static final String ACTION_WATCH_PLANT_SERVICE = "watch_plant";
+    public static final String ACTION_WATCH_YELLOW_SERVICE = "watch_yellow";
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -28,7 +32,12 @@ public class MyAlarmReceiver extends BroadcastReceiver {
                     serviceIntent.putExtras(extras);
                 }
                 serviceIntent.setAction(PlantWatcherService.ACTION_GET_AREA);
+                context.stopService(serviceIntent);
                 context.startService(serviceIntent);
+                break;
+
+            case ACTION_WATCH_YELLOW_SERVICE:
+                Log.d(TAG, "ACTION_WATCH_YELLOW_SERVICE");
                 break;
         }
 

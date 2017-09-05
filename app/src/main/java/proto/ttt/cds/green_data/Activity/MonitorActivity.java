@@ -27,7 +27,6 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Queue;
 
@@ -56,7 +55,7 @@ public class MonitorActivity extends AppCompatActivity {
     final H mH = new H();
 
     private int mCurOrientation;
-    private PendingIntent mAlarmManagerIntent;
+    private PendingIntent mPlantWatcherPendingIntent;
 
     private ImageView[] mPrevImageView = new ImageView[PREVIEW_NUM];
     private Rect[] mPrevRect = new Rect[PREVIEW_NUM];
@@ -171,8 +170,35 @@ public class MonitorActivity extends AppCompatActivity {
         }
     }
 
-    private void createAlarmManagerIntentIfNeeded() {
-        if (mAlarmManagerIntent==null) {
+    private PendingIntent mYellowWatcherPendingIntent;
+    private void createYellowWatcherIntentIfNeeded() {
+        if (mYellowWatcherPendingIntent == null) {
+            mYellowWatcherPendingIntent = createWatchYellowServiceIntent(this);
+            if (DEBUG) {
+                Log.d(TAG, "createYellowWatcherIntentIfNeeded()");
+            }
+        }
+    }
+
+    private static PendingIntent createWatchYellowServiceIntent(Context context) {
+        Intent intent = new Intent(context, MyAlarmReceiver.class);
+        intent.setAction(MyAlarmReceiver.ACTION_WATCH_YELLOW_SERVICE);
+//        Bundle bundle = new Bundle();
+//        bundle.putInt(PlantWatcherService.BUNDLE_KEY_CONTOUR_NUM, numOfContours);
+//        bundle.putParcelableArray(PlantWatcherService.BUNDLE_KEY_PREVIEW_RECT, rect);
+//
+//        int areaSize = subRect.length;
+//        bundle.putInt(PlantWatcherService.BUNDLE_KEY_PREVIEW_NUM, areaSize);
+//        for (int i=0; i <areaSize; i++) {
+//            bundle.putParcelableArray(PlantWatcherService.BUNDLE_KEY_SUBAREA_RECT + i, subRect[i]);
+//        }
+//        intent.putExtras(bundle);
+        return PendingIntent.getBroadcast(context, MyAlarmReceiver.REQUEST_CODE_WATCH_YELLOW, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT);
+    }
+
+    private void createPlantWatcherIntentIfNeeded() {
+        if (mPlantWatcherPendingIntent ==null) {
             if (mDividerViewPos.length>=2) {
                 Rect[][] subAreas = new Rect[PREVIEW_NUM][PLANTS_NUM_IN_PREVIEW];
                 for (int y=0; y<subAreas.length; y++) {
@@ -182,22 +208,22 @@ public class MonitorActivity extends AppCompatActivity {
                                 mPrevRect[y].width();
                         subAreas[y][x] = new Rect(left, 0, right, mPrevRect[y].height());
                         if (DEBUG) {
-                            Log.d(TAG, "createAlarmManagerIntentIfNeeded(): subAreas(" + y + "," + x + ") = "
+                            Log.d(TAG, "createPlantWatcherIntentIfNeeded(): subAreas(" + y + "," + x + ") = "
                                     + subAreas[y][x]);
                         }
                     }
                 }
 
-                mAlarmManagerIntent = createWatchPlantServiceIntent(this,
+                mPlantWatcherPendingIntent = createWatchPlantServiceIntent(this,
                         PlantWatcherService.DEFAULT_CONTOUR_COUNT, mPrevRect, subAreas);
             } else {
-                Log.d(TAG, "createAlarmManagerIntentIfNeeded(): Intent NOT created! INVALID values: " +
+                Log.d(TAG, "createPlantWatcherIntentIfNeeded(): Intent NOT created! INVALID values: " +
                         "mDividerViewPos.length = " + mDividerViewPos.length);
             }
         }
     }
 
-    public static PendingIntent createWatchPlantServiceIntent(Context context, int numOfContours
+    private static PendingIntent createWatchPlantServiceIntent(Context context, int numOfContours
             ,Rect[] rect, Rect[][] subRect) {
         Intent intent = new Intent(context, MyAlarmReceiver.class);
         intent.setAction(MyAlarmReceiver.ACTION_WATCH_PLANT_SERVICE);
@@ -212,7 +238,7 @@ public class MonitorActivity extends AppCompatActivity {
         }
 
         intent.putExtras(bundle);
-        return PendingIntent.getBroadcast(context, MyAlarmReceiver.REQUEST_CODE, intent,
+        return PendingIntent.getBroadcast(context, MyAlarmReceiver.REQUEST_CODE_WATCH_PLANT, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
@@ -418,8 +444,8 @@ public class MonitorActivity extends AppCompatActivity {
     private void takePicture() {
         if (mCurrCameraId >= 0 && mCurrCameraId < CAMERA_NUM && mCurrCameraId < PREVIEW_NUM) {
             if (isAllCameraReady()) {
-                boolean isOpended = mCam.openCamera(mCurrCameraId, TAG);
-                if (isOpended) {
+                boolean isOpen = mCam.openCamera(mCurrCameraId, TAG);
+                if (isOpen) {
                     mCam.takePictureWithoutPreview(getImageFileName(mCurrCameraId));
 
                     mShouldRetakePicture = true;
@@ -436,16 +462,27 @@ public class MonitorActivity extends AppCompatActivity {
     }
 
     private void scheduleAlarm() {
-        createAlarmManagerIntentIfNeeded();
-        long firstMillis = System.currentTimeMillis();
+        createPlantWatcherIntentIfNeeded();
         AlarmManager alarmManager = (AlarmManager) this.getSystemService(Context.ALARM_SERVICE);
-        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, firstMillis, 1000 * 30, mAlarmManagerIntent);
+        alarmManager.cancel(mPlantWatcherPendingIntent);
+        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis(), 1000 * 30, mPlantWatcherPendingIntent);
+
+        createYellowWatcherIntentIfNeeded();
+        alarmManager.cancel(mYellowWatcherPendingIntent);
+        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 1000, 1000 * 200, mYellowWatcherPendingIntent);
+
     }
 
     private void stopScheduleAlarm() {
-        createAlarmManagerIntentIfNeeded();
+        createPlantWatcherIntentIfNeeded();
         AlarmManager am = (AlarmManager) this.getSystemService(Context.ALARM_SERVICE);
-        am.cancel(mAlarmManagerIntent);
+
+        if (mPlantWatcherPendingIntent != null) {
+            am.cancel(mPlantWatcherPendingIntent);
+        }
+        if (mYellowWatcherPendingIntent != null) {
+            am.cancel(mYellowWatcherPendingIntent);
+        }
     }
 
     @Override

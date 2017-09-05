@@ -207,8 +207,8 @@ public class PlantWatcherService extends Service implements CameraNoPreview.ICam
     private void takePicture() {
         if (mCurrCameraId >= 0 && mCurrCameraId < mNumOfCameras) {
             if (isAllCameraReady()) {
-                boolean isOpened = mCam.openCamera(mCurrCameraId, TAG);
-                if (isOpened) {
+                boolean isOpen = mCam.openCamera(mCurrCameraId, TAG);
+                if (isOpen) {
                     mCam.takePictureWithoutPreview(FILE_NAME);
                     mShouldRetakePicture = true;
                     mH.postDelayed(mTimeoutRunnable, TIMEOUT_MS);
