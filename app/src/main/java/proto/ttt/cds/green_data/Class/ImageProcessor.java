@@ -92,7 +92,7 @@ public class ImageProcessor {
         // Save the biggest contours for each individual sub area
         int subAreasCnt = subAreaRect == null ? 1 : subAreaRect.length;
         double[][] biggestAreas = new double[numOfContour][subAreasCnt];
-        for (int i = 0; i < subAreasCnt; i++) {
+        for (int i=0; i<subAreasCnt; i++) {
             contourPoints.clear();
 
             if (subAreaRect == null) {
@@ -154,7 +154,7 @@ public class ImageProcessor {
     }
 
     /**
-     * Recalculates all sub areas to fit the size of the new area
+     * Recalculates all sub areas to equivalent sizes for the new whole-area
      */
     private Rect[] reCalcSubArea(Rect[] subAreas, Rect area, Rect newArea) {
         if (area.equals(newArea)) {

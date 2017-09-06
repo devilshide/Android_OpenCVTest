@@ -25,20 +25,27 @@ public class MyAlarmReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
         switch(action) {
-            case ACTION_WATCH_PLANT_SERVICE:
-                Intent serviceIntent = new Intent(context, PlantWatcherService.class);
+            case ACTION_WATCH_PLANT_SERVICE: {
+                Log.d(TAG, "ACTION_WATCH_PLANT_SERVICE");
+                Intent serviceIntent = new Intent(context, AreaWatcherService.class);
                 Bundle extras = intent.getExtras();
                 if (extras != null) {
                     serviceIntent.putExtras(extras);
                 }
-                serviceIntent.setAction(PlantWatcherService.ACTION_GET_AREA);
                 context.stopService(serviceIntent);
                 context.startService(serviceIntent);
-                break;
+            } break;
 
-            case ACTION_WATCH_YELLOW_SERVICE:
+            case ACTION_WATCH_YELLOW_SERVICE: {
                 Log.d(TAG, "ACTION_WATCH_YELLOW_SERVICE");
-                break;
+                Intent serviceIntent = new Intent(context, YellowWatcherService.class);
+                Bundle extras = intent.getExtras();
+                if (extras != null) {
+                    serviceIntent.putExtras(extras);
+                }
+                context.stopService(serviceIntent);
+                context.startService(serviceIntent);
+            } break;
         }
 
     }

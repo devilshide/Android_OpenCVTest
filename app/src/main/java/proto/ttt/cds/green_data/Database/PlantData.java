@@ -1,8 +1,5 @@
-package proto.ttt.cds.green_data.Class;
+package proto.ttt.cds.green_data.Database;
 
-/**
- * Created by changdo on 17. 8. 8.
- */
 
 public class PlantData {
 

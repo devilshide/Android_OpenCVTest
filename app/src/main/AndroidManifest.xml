@@ -23,9 +23,11 @@
         </activity>
 
         <service
-            android:name="proto.ttt.cds.green_data.Background.Periodic.PlantWatcherService"
+            android:name="proto.ttt.cds.green_data.Background.Periodic.AreaWatcherService"
             android:exported="false" />
-
+        <service
+            android:name="proto.ttt.cds.green_data.Background.Periodic.YellowWatcherService"
+            android:exported="false" />
         <receiver
             android:name="proto.ttt.cds.green_data.Background.Periodic.MyAlarmReceiver"
             android:process=":remote" />

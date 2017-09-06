@@ -8,8 +8,6 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.provider.BaseColumns;
 import android.util.Log;
 
-import proto.ttt.cds.green_data.Class.PlantData;
-
 /**
  * Created by changdo on 17. 8. 1.
  */

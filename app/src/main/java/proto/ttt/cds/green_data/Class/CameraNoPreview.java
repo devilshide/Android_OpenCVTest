@@ -21,13 +21,12 @@ import java.util.ArrayList;
 public class CameraNoPreview {
     public static final String TAG = "CameraNoPreview";
 
-//    private static final boolean DEBUG_CAMERA = PlantWatcherService.DEBUG;
-    private static final boolean DEBUG_CAMERA = true;
+//    private static final boolean DEBUG = AreaWatcherService.DEBUG;
+    private static final boolean DEBUG = true;
     public static final int CAMERA_NUM = Camera.getNumberOfCameras();
 
-    public static final int INVALID_CAM_INDEX = -99;
-    public static final int DEFAULT_CAM_INDEX = 0;
-    public static final File DEFAULT_STORAGE_DIR = Environment
+    private static final int INVALID_CAM_INDEX = -99;
+    private static final File DEFAULT_STORAGE_DIR = Environment
             .getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM);
 
     private static Camera mCam;
@@ -143,14 +142,14 @@ public class CameraNoPreview {
                     FileOutputStream foStream = new FileOutputStream(new File(filePath));
                     foStream.write(bytes);
                     foStream.close();
-                    if (DEBUG_CAMERA) Log.d(TAG, "onPictureTaken(): files saved, path = " + filePath
+                    if (DEBUG) Log.d(TAG, "onPictureTaken(): files saved, path = " + filePath
                             + ", openedCamIndex = " + camIndex);
                     mH.obtainMessage(H.NOTIFY_PICTURE_TAKEN, camIndex).sendToTarget();
                 } catch (IOException e) {
                     e.printStackTrace();
-                    if (DEBUG_CAMERA) Log.d(TAG, "onPictureTaken(): IOException");
+                    if (DEBUG) Log.d(TAG, "onPictureTaken(): IOException");
                 } finally {
-                    if (DEBUG_CAMERA) Log.d(TAG, "onPictureTaken(): close camera");
+                    if (DEBUG) Log.d(TAG, "onPictureTaken(): close camera");
                     closeCamera();
                 }
             }
