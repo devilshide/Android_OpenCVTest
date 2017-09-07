@@ -65,6 +65,12 @@ public class CameraNoPreview {
         try {
             mCam = Camera.open(index);
             if (mCam != null) {
+//                try {
+//                    mCam.setPreviewTexture(new SurfaceTexture(0));
+//                    mCam.startPreview();
+//                } catch (IOException e) {
+//                    e.printStackTrace();
+//                }
                 updateCameraStatus(index, true);
                 Log.d(TAG, "openCamera(): CAMERA# " + index + " opened, Caller = " + caller);
                 return true;
@@ -114,22 +120,25 @@ public class CameraNoPreview {
         if (mStoragePath == null) {
             mStoragePath = DEFAULT_STORAGE_DIR.getAbsolutePath();
         }
-        takePictureWithoutPreview(mStoragePath + "/" + name);
-    }
 
-    private void takePictureWithoutPreview(String filePath) {
-        if (mCam != null && filePath != null) {
-            try {
-                mCam.setPreviewTexture(new SurfaceTexture(0));
-                mCam.startPreview();
-                mCam.takePicture(null, null, getJpegCallback(filePath));
-                Log.d(TAG, "takePicture(): PICTURE TAKEN");
-            } catch (IOException e) {
-                e.printStackTrace();
+        final String filePath = mStoragePath + "/" + name;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                if (mCam != null && filePath != null) {
+                    try {
+                        mCam.setPreviewTexture(new SurfaceTexture(0));
+                        mCam.startPreview();
+                        mCam.takePicture(null, null, getJpegCallback(filePath));
+                        Log.d(TAG, "takePicture(): PICTURE TAKEN");
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                } else {
+                    Log.d(TAG, "takePicture(): camera is NULL, mCam = " + mCam + ", filePath = " + filePath);
+                }
             }
-        } else {
-            Log.d(TAG, "takePicture(): camera is NULL, mCam = " + mCam + ", filePath = " + filePath);
-        }
+        }).start();
     }
 
     private Camera.PictureCallback getJpegCallback(String path) {

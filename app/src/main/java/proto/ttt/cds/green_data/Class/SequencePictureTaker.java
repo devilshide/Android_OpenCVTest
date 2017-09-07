@@ -134,15 +134,15 @@ public abstract class SequencePictureTaker implements CameraNoPreview.ICameraCal
     private void takePicture() {
         if (mCamNoPreview != null && mCurrCameraId >= 0 && mCurrCameraId < CAMERA_NUM) {
             if (isAllCameraReady() && mCamNoPreview.openCamera(mCurrCameraId, mCaller)) {
-                new Thread(new Runnable() {
-                    @Override
-                    public void run() {
+//                new Thread(new Runnable() {
+//                    @Override
+//                    public void run() {
                         String fileName = mPicName + mCurrCameraId;
                         mCamNoPreview.takePicture(fileName);
                         mShouldRetakePicture = true;
                         mH.postDelayed(mTimeoutRunnable, TIMEOUT_MS);
-                    }
-                }).start();
+//                    }
+//                }).start();
 
             } else {
                 if (DEBUG) Log.d(TAG, "takePicture() A CAMERA IN USE, ADD TO PENDING, camId = "
@@ -192,13 +192,12 @@ public abstract class SequencePictureTaker implements CameraNoPreview.ICameraCal
 
     @Override
     public void onCameraClosed(int camId) {
-        boolean isLastCam = camId == CAMERA_NUM - 1;
+        boolean isLastCam = camId == mCameras[mCameras.length - 1];
         if (isLastCam) {
             if (DEBUG) Log.d(TAG, "onCameraClosed(): LAST CAM CLOSED, camId = " + camId + ", caller = " + mCaller);
             mCameraManager.unregisterAvailabilityCallback(mCamAvailabilityCallback);
         } else {
             if (DEBUG) Log.d(TAG, "onCameraClosed(): taking another picture, camId = " + camId + ", caller = " + mCaller);
-//            mCurrCameraId = camId + 1;
             if (mCamSequenceIndex + 1 < mCameras.length) {
                 mCurrCameraId = mCameras[++mCamSequenceIndex];
                 takePicture();

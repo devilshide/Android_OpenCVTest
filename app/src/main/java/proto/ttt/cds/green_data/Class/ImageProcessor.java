@@ -42,13 +42,13 @@ public class ImageProcessor {
     public ImageProcessor() {}
 
     public double[][] getBiggestContoursFromImg(String imgPath, Rect[] subAreaRect, Rect wholeRect,
-                                                int numOfContour) {
+                                                int numOfContour, Scalar[] colorRange) {
         Bitmap bitmap = getRGBBitmap(imgPath);
         if (bitmap != null) {
             Mat inputMat = new Mat(bitmap.getHeight(), bitmap.getWidth(), CvType.CV_8UC3);
             Utils.bitmapToMat(bitmap, inputMat);
 
-            return getBiggestContours(inputMat, subAreaRect, wholeRect, numOfContour);
+            return getBiggestContours(inputMat, subAreaRect, wholeRect, numOfContour, colorRange);
         }
         Log.d(TAG, "getBiggestContoursFromImg(): No Bitmap found from path = " + imgPath);
         return null;
@@ -59,11 +59,12 @@ public class ImageProcessor {
      * @param subs This can be null if there are no sub areas. This will search contours within the
      *                 entire image
      * @param origArea The area where sub areas were measured
-     * @param numOfContour number of biggest contours to search inside each area
+     * @param numOfContour number of the biggest contours to find inside each sub area
      * @return The area for the biggest contours in the biggest order for each sub areas
      *
     */
-    private double[][] getBiggestContours(Mat rgbMat, Rect[] subs, Rect origArea, int numOfContour) {
+    private double[][] getBiggestContours(Mat rgbMat, Rect[] subs, Rect origArea, int numOfContour,
+                                          Scalar[] colorRange) {
         if (rgbMat == null || numOfContour < 1 || (subs != null && subs.length == 0)) {
             return null;
         }
@@ -79,10 +80,10 @@ public class ImageProcessor {
         Imgproc.cvtColor(mRGB, mTempMat, Imgproc.COLOR_RGB2HSV);
 
         Mat masked = new Mat();
-        Scalar green_l = new Scalar(30, 50, 50);
-        Scalar green_u = new Scalar(90, 255, 255);
+//        Scalar green_l = new Scalar(30, 50, 50);
+//        Scalar green_u = new Scalar(90, 255, 255);
 
-        Core.inRange(mTempMat, green_l, green_u, masked);
+        Core.inRange(mTempMat, colorRange[0], colorRange[1], masked);
         Imgproc.dilate(masked, masked, Imgproc.getStructuringElement(Imgproc.MORPH_DILATE, new Size(15,15)));
 
         Rect[] subAreaRect = reCalcSubArea(subs, origArea, new Rect(0, 0, masked.cols(), masked.rows()));

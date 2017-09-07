@@ -3,21 +3,16 @@ package proto.ttt.cds.green_data.Background.Periodic;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.os.Parcelable;
 import android.util.Log;
 
-import java.util.Calendar;
-import java.util.Map;
-import java.util.Set;
+import org.opencv.core.Scalar;
 
 import proto.ttt.cds.green_data.Class.ImageProcessor;
 import proto.ttt.cds.green_data.Class.SequencePictureTaker;
 import proto.ttt.cds.green_data.Database.PlantDBHandler;
-import proto.ttt.cds.green_data.Database.PlantData;
 
 /**
  *
@@ -54,6 +49,9 @@ public class YellowWatcherService extends Service {
 
     private Intent mIntent;
     private Context mContext;
+
+    private Scalar mYellow_lower = new Scalar(30, 50, 50);
+    private Scalar mYellow_upper = new Scalar(90, 255, 255);
 
 
     private SequencePictureTaker mPictureTaker;
@@ -144,6 +142,7 @@ public class YellowWatcherService extends Service {
                         @Override
                         public void run() {
 
+                            // hard-code sub areas cuz its just a proto
                             Rect[] subRects = new Rect[] {
                                     new Rect(0,0,100,150),
                                     new Rect(100,0,200,150),
@@ -155,7 +154,9 @@ public class YellowWatcherService extends Service {
                             Rect prevRect = new Rect(0,0,300,300);
 
                             double[][] contours = mImageProcessor.
-                                    getBiggestContoursFromImg(getPicturePath(camIndex), subRects, prevRect, mNumOfContours);
+                                    getBiggestContoursFromImg(getPicturePath(camIndex), subRects,
+                                            prevRect, mNumOfContours,
+                                            new Scalar[]{mYellow_lower, mYellow_upper});
 
                             if (contours == null) {
                                 return;
@@ -208,30 +209,6 @@ public class YellowWatcherService extends Service {
     public IBinder onBind(Intent arg0) {
         Log.d(TAG, "onBind()");
         return null;
-    }
-
-    /**
-     * Time in YYMMDDHHMM format
-     */
-    private long getCurrentTime() {
-        Calendar c = Calendar.getInstance();
-        int[] timeElements = new int[5];
-        timeElements[4] = c.get(Calendar.YEAR) % 2000;
-        timeElements[3] = c.get(Calendar.MONTH) + 1;
-        timeElements[2] = c.get(Calendar.DAY_OF_MONTH);
-        timeElements[1] = c.get(Calendar.HOUR_OF_DAY);
-        timeElements[0] = c.get(Calendar.MINUTE);
-        long time = 0;
-        long multiplier = 100;
-        for(int i = 0; i < timeElements.length; i++) {
-            if (i == 0) {
-                time += timeElements[i];
-            } else {
-                time += timeElements[i] * multiplier;
-                multiplier *= 100;
-            }
-        }
-        return time;
     }
 
 }

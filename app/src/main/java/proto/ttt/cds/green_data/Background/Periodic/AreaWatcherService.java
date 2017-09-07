@@ -10,6 +10,8 @@ import android.os.IBinder;
 import android.os.Parcelable;
 import android.util.Log;
 
+import org.opencv.core.Scalar;
+
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Map;
@@ -57,7 +59,8 @@ public class AreaWatcherService extends Service {
     private Intent mIntent;
     private Context mContext;
     private String[] mPlantsName = new String[MAX_NUMBER_OF_PLANTS];
-
+    private Scalar mGreen_low = new Scalar(30, 50, 50);
+    private Scalar mGreen_upper = new Scalar(90, 255, 255);
 
     private SequencePictureTaker mPictureTaker;
 
@@ -147,7 +150,8 @@ public class AreaWatcherService extends Service {
                         public void run() {
                             double[][] contours = mImageProcessor.
                                     getBiggestContoursFromImg(getPicturePath(camIndex),
-                                            mSubAreaRect[camIndex], mPreviewRect[camIndex], mNumOfContours);
+                                            mSubAreaRect[camIndex], mPreviewRect[camIndex],
+                                            mNumOfContours, new Scalar[]{mGreen_low, mGreen_upper});
 
                             if (contours == null) {
                                 return;
