@@ -1,10 +1,13 @@
-package proto.ttt.cds.green_data.Background.Periodic;
+package proto.ttt.cds.green_data.Receivers;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
+
+import proto.ttt.cds.green_data.Background.Periodic.AreaWatcherService;
+import proto.ttt.cds.green_data.Background.Periodic.YellowWatcherService;
 
 /**
  * Created by changdo on 17. 8. 2.

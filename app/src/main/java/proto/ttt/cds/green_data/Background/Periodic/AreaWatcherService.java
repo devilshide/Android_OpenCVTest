@@ -59,8 +59,8 @@ public class AreaWatcherService extends Service {
     private Intent mIntent;
     private Context mContext;
     private String[] mPlantsName = new String[MAX_NUMBER_OF_PLANTS];
-    private Scalar mGreen_low = new Scalar(30, 50, 50);
-    private Scalar mGreen_upper = new Scalar(90, 255, 255);
+    private Scalar mGreen_low = new Scalar(25, 50, 50);
+    private Scalar mGreen_upper = new Scalar(80, 255, 255);
 
     private SequencePictureTaker mPictureTaker;
 
@@ -102,17 +102,17 @@ public class AreaWatcherService extends Service {
                     //get each preview rect
                     Parcelable[] previews = extras.getParcelableArray(BUNDLE_KEY_PREVIEW_RECT);
                     mPreviewRect = new Rect[previews.length];
-                    for (int i = 0; i < mPreviewRect.length; i++) {
+                    for (int i=0; i<mPreviewRect.length; i++) {
                         mPreviewRect[i] = (Rect) previews[i];
                     }
 
                     //get sub rects
                     int prevSize = extras.getInt(BUNDLE_KEY_SUBAREA_DIMEN_1_SIZE, 0);
                     mSubAreaRect = new Rect[prevSize][];
-                    for (int i = 0; i < prevSize; i++) {
+                    for (int i=0; i<prevSize; i++) {
                         Parcelable[] subs = extras.getParcelableArray(BUNDLE_KEY_SUBAREA_RECT + i);
                         mSubAreaRect[i] = new Rect[subs.length];
-                        for (int j = 0; j < mSubAreaRect[i].length; j++) {
+                        for (int j=0; j<mSubAreaRect[i].length; j++) {
                             mSubAreaRect[i][j] = (Rect) subs[j];
                         }
                     }

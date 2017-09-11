@@ -122,30 +122,20 @@ public abstract class SequencePictureTaker implements CameraNoPreview.ICameraCal
     }
 
     private boolean isAllCameraReady() {
-        if (mUnavailableCameras == 0) {
-            if (DEBUG) Log.d(TAG, "isAllCameraReady(): ALL CAMS READY");
-            return true;
-        } else {
-            if (DEBUG) Log.d(TAG, "isAllCameraReady(): ALL CAMS NOT READY");
-            return false;
-        }
+        return mUnavailableCameras == 0 ? true : false;
     }
 
     private void takePicture() {
         if (mCamNoPreview != null && mCurrCameraId >= 0 && mCurrCameraId < CAMERA_NUM) {
-            if (isAllCameraReady() && mCamNoPreview.openCamera(mCurrCameraId, mCaller)) {
-//                new Thread(new Runnable() {
-//                    @Override
-//                    public void run() {
-                        String fileName = mPicName + mCurrCameraId;
-                        mCamNoPreview.takePicture(fileName);
-                        mShouldRetakePicture = true;
-                        mH.postDelayed(mTimeoutRunnable, TIMEOUT_MS);
-//                    }
-//                }).start();
-
+            if (isAllCameraReady()) {
+                Log.d(TAG, "takePicture(): ALL CAMS READY");
+                mCamNoPreview.openCamera(mCurrCameraId, mCaller);
+                String fileName = mPicName + mCurrCameraId;
+                mCamNoPreview.takePicture(fileName);
+                mShouldRetakePicture = true;
+                mH.postDelayed(mTimeoutRunnable, TIMEOUT_MS);
             } else {
-                if (DEBUG) Log.d(TAG, "takePicture() A CAMERA IN USE, ADD TO PENDING, camId = "
+                if (DEBUG) Log.d(TAG, "takePicture() ALL CAMS NOT READY. ADD TO PENDING, camId = "
                         + mCurrCameraId);
                 if (!mCamPendingList.contains("" + mCurrCameraId)) {
                     mCamPendingList.add("" + mCurrCameraId);

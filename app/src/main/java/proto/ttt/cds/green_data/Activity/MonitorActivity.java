@@ -26,7 +26,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import proto.ttt.cds.green_data.Background.Periodic.AreaWatcherService;
-import proto.ttt.cds.green_data.Background.Periodic.MyAlarmReceiver;
+import proto.ttt.cds.green_data.Receivers.MyAlarmReceiver;
 import proto.ttt.cds.green_data.Class.SequencePictureTaker;
 import proto.ttt.cds.green_data.Database.PlantDBHandler;
 import proto.ttt.cds.green_data.R;
@@ -37,8 +37,8 @@ public class MonitorActivity extends AppCompatActivity {
 
     public static final String TAG = "MonitorActivity";
 
-    private static final long FREQUECY_WATCH_AREA = 1000 * 30;
-    private static final long FREQUECY_WATCH_YELLOW = 1000 * 100;
+    private static final long FREQUECY_WATCH_AREA = 1000 * 60;
+    private static final long FREQUECY_WATCH_YELLOW = 1000 * 60 * 60;
 
     public static final int PLANTS_NUM = 6;
     public static final int PREVIEW_NUM = 2;
@@ -216,6 +216,9 @@ public class MonitorActivity extends AppCompatActivity {
                 public void onClick(View view) {
                     //schedule service then destroy activity
                     scheduleAlarm();
+                    //testing
+                    startActivity(new Intent(MonitorActivity.this, BaseActivity.class));
+
                     finish();
                 }
             });

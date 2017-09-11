@@ -1,20 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="proto.ttt.cds.green_data" >
+    package="proto.ttt.cds.green_data">
 
-    <uses-permission android:name="android.permission.CAMERA"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/AppTheme" >
-
-        <activity
-            android:name="proto.ttt.cds.green_data.Activity.MonitorActivity">
+        android:theme="@style/AppTheme">
+        <activity android:name=".Activity.MonitorActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -23,15 +22,28 @@
         </activity>
 
         <service
-            android:name="proto.ttt.cds.green_data.Background.Periodic.AreaWatcherService"
+            android:name=".Background.Periodic.AreaWatcherService"
             android:exported="false" />
         <service
-            android:name="proto.ttt.cds.green_data.Background.Periodic.YellowWatcherService"
+            android:name=".Background.Periodic.YellowWatcherService"
             android:exported="false" />
+
         <receiver
-            android:name="proto.ttt.cds.green_data.Background.Periodic.MyAlarmReceiver"
+            android:name=".Receivers.MyAlarmReceiver"
+            android:process=":remote" />
+        <receiver
+            android:name=".Activity.BaseActivity$YellowReceiver"
             android:process=":remote" />
 
+        <activity
+            android:name=".Activity.BaseActivity"
+            android:label="@string/title_activity_base"
+            android:theme="@style/AppTheme.NoActionBar" />
+
+        <service
+            android:name=".Background.Periodic.PictureTakerService"
+            android:enabled="true"
+            android:exported="true"></service>
     </application>
 
 </manifest>

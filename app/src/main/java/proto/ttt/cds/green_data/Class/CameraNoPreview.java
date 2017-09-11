@@ -36,7 +36,8 @@ public class CameraNoPreview {
     private String mStoragePath;
 
     private ArrayList<ICameraCallback> listeners = new ArrayList<>();
-    private CameraNoPreview mCameraNoPreview;
+    private static CameraNoPreview mCameraNoPreview;
+    private String mCaller;
 
     private CameraNoPreview() {
         if (CAMERA_NUM < 1) {
@@ -46,7 +47,7 @@ public class CameraNoPreview {
         setStoragePath(null);
     }
 
-    public CameraNoPreview getCameraNoPreview() {
+    public static CameraNoPreview getCameraNoPreview() {
         if (mCameraNoPreview == null) {
             mCameraNoPreview = new CameraNoPreview();
         }
@@ -63,14 +64,13 @@ public class CameraNoPreview {
 
     public boolean openCamera(int index, String caller) {
         try {
+            mCaller = caller;
+            if (mCam != null) {
+                mCam.stopPreview();
+                mCam.release();
+            }
             mCam = Camera.open(index);
             if (mCam != null) {
-//                try {
-//                    mCam.setPreviewTexture(new SurfaceTexture(0));
-//                    mCam.startPreview();
-//                } catch (IOException e) {
-//                    e.printStackTrace();
-//                }
                 updateCameraStatus(index, true);
                 Log.d(TAG, "openCamera(): CAMERA# " + index + " opened, Caller = " + caller);
                 return true;
@@ -88,13 +88,13 @@ public class CameraNoPreview {
 
     public void closeCamera() {
         if (mCam != null) {
-            Log.d(TAG, "closeCamera(): releasing camera");
+            Log.d(TAG, "closeCamera(): releasing camera, caller = " + mCaller);
             mCam.stopPreview();
             mCam.release();
             mCam = null;
             updateCameraStatus(mOpenCamIndex, false);
         } else {
-            Log.d(TAG, "closeCamera(): camera already released");
+            Log.d(TAG, "closeCamera(): camera already released, caller = " + mCaller);
         }
     }
 
@@ -130,7 +130,7 @@ public class CameraNoPreview {
                         mCam.setPreviewTexture(new SurfaceTexture(0));
                         mCam.startPreview();
                         mCam.takePicture(null, null, getJpegCallback(filePath));
-                        Log.d(TAG, "takePicture(): PICTURE TAKEN");
+                        Log.d(TAG, "takePicture(): PICTURE TAKEN, mCaller = " + mCaller);
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -147,18 +147,19 @@ public class CameraNoPreview {
         Camera.PictureCallback jpeg = new Camera.PictureCallback() {
             @Override
             public void onPictureTaken(byte[] bytes, Camera camera) {
+                mCam.startPreview();
                 try {
                     FileOutputStream foStream = new FileOutputStream(new File(filePath));
                     foStream.write(bytes);
                     foStream.close();
                     if (DEBUG) Log.d(TAG, "onPictureTaken(): files saved, path = " + filePath
-                            + ", openedCamIndex = " + camIndex);
+                            + ", openedCamIndex = " + camIndex + ", caller = " + mCaller);
                     mH.obtainMessage(H.NOTIFY_PICTURE_TAKEN, camIndex).sendToTarget();
                 } catch (IOException e) {
                     e.printStackTrace();
-                    if (DEBUG) Log.d(TAG, "onPictureTaken(): IOException");
+                    if (DEBUG) Log.d(TAG, "onPictureTaken(): IOException, caller = " + mCaller);
                 } finally {
-                    if (DEBUG) Log.d(TAG, "onPictureTaken(): close camera");
+                    if (DEBUG) Log.d(TAG, "onPictureTaken(): close camera, caller = " + mCaller);
                     closeCamera();
                 }
             }

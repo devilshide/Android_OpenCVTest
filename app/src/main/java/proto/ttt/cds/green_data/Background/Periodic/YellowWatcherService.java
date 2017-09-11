@@ -24,8 +24,10 @@ public class YellowWatcherService extends Service {
 
     private static final boolean DEBUG = true;
     public static final String TAG = "YellowWatcherService";
-    public static final int[] CAMERAS = new int[]{0};
+    public final static String SEND_YELLOW_LOCATION = "sendYellowMessage";
+    public static final long YELLOW_SIZE_THRESHOLD = 100000;
 
+    public static final int[] CAMERAS = new int[]{0};
     // DB  Access
     private static final String FILE_NAME = TAG;
     public static final String SHARED_PREF_PLANT = "plantsName";
@@ -50,8 +52,12 @@ public class YellowWatcherService extends Service {
     private Intent mIntent;
     private Context mContext;
 
-    private Scalar mYellow_lower = new Scalar(30, 50, 50);
-    private Scalar mYellow_upper = new Scalar(90, 255, 255);
+    private Scalar mPureGreen_lower = new Scalar(39, 50, 50);
+    private Scalar mPureGreen_upper = new Scalar(80, 255, 255);
+    private Scalar mGreen_lower = new Scalar(25, 50, 50);
+    private Scalar mGreen_upper = new Scalar(80, 255, 255);
+
+    double[][] mYellowedArea;
 
 
     private SequencePictureTaker mPictureTaker;
@@ -153,23 +159,47 @@ public class YellowWatcherService extends Service {
 
                             Rect prevRect = new Rect(0,0,300,300);
 
-                            double[][] contours = mImageProcessor.
+                            double[][] greenContours = mImageProcessor.
                                     getBiggestContoursFromImg(getPicturePath(camIndex), subRects,
                                             prevRect, mNumOfContours,
-                                            new Scalar[]{mYellow_lower, mYellow_upper});
+                                            new Scalar[]{mGreen_lower, mGreen_upper});
 
-                            if (contours == null) {
+                            double[][] pureGreenContours = mImageProcessor.
+                                    getBiggestContoursFromImg(getPicturePath(camIndex), subRects,
+                                            prevRect, mNumOfContours,
+                                            new Scalar[]{mPureGreen_lower, mPureGreen_upper});
+
+                            if (pureGreenContours == null || greenContours == null) {
                                 return;
                             }
 
+                            mYellowedArea = new double[greenContours.length][greenContours[0].length];
+                            for (int i=0; i<greenContours.length; i++) {
+                                for (int j=0; j<greenContours[0].length; j++) {
+                                    mYellowedArea[i][j] = greenContours[i][j] - pureGreenContours[i][j];
+                                }
+                            }
+
+//                            if (contours == null) {
+//                                return;
+//                            }
+
                             if (DEBUG) {
-                                for (int i = 0; i < contours.length; i++) {
-                                    for (int j = 0; j < contours[0].length; j++) {
-                                        Log.d(TAG, "onPictureTaken(): contour[" + i + "][" + j + "] = "
-                                                + contours[i][j] + ", caller = " + mPictureTaker.getCaller());
+//                                for (int i = 0; i < contours.length; i++) {
+//                                    for (int j = 0; j < contours[0].length; j++) {
+//                                        Log.d(TAG, "onPictureTaken(): contour[" + i + "][" + j + "] = "
+//                                                + contours[i][j] + ", caller = " + mPictureTaker.getCaller());
+//                                    }
+//                                }
+                                for (int i = 0; i < mYellowedArea.length; i++) {
+                                    for (int j = 0; j < mYellowedArea[0].length; j++) {
+                                        Log.d(TAG, "onPictureTaken(): yellowedArea[" + i + "][" + j + "] = "
+                                                + mYellowedArea[i][j] + ", caller = " + mPictureTaker.getCaller());
                                     }
                                 }
                             }
+
+                            broadcastIfYellowIsBiggerThanThreshold();
 
                             // Get the # number of the biggest contours in each sub section
 //                            synchronized (this) {
@@ -211,4 +241,22 @@ public class YellowWatcherService extends Service {
         return null;
     }
 
+    private void broadcastIfYellowIsBiggerThanThreshold() {
+        if (mYellowedArea == null || mYellowedArea.length == 0) {
+            return;
+        }
+
+        for (int i=0; i<mYellowedArea.length; i++) {
+            for (int j=0; j<mYellowedArea[0].length; j++) {
+                if (mYellowedArea[i][j] > YELLOW_SIZE_THRESHOLD) {
+                    Log.d(TAG, "broadcastIfYellowIsBiggerThanThreshold(): YELLOW BIGGER THAN THRES @ i = "
+                            + i + ", j = " + j);
+                    Intent intent = new Intent();
+                    intent.setAction(SEND_YELLOW_LOCATION);
+                    intent.putExtra("location", j);
+                    sendBroadcast(intent);
+                }
+            }
+        }
+    }
 }
