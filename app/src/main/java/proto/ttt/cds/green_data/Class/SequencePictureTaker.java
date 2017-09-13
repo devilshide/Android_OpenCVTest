@@ -174,10 +174,9 @@ public abstract class SequencePictureTaker implements CameraNoPreview.ICameraCal
     }
 
     @Override
-    public void onPictureTaken(int camId) {
+    public void onPictureTaken(int camId, String filePath) {
         mShouldRetakePicture = false;
-        onPictureTakenCB(camId);
-
+        onPictureTakenCB(camId, filePath);
     }
 
     @Override
@@ -198,7 +197,7 @@ public abstract class SequencePictureTaker implements CameraNoPreview.ICameraCal
 
     public abstract void onFailedToAccessOpenedCameraCB(int camId);
     public abstract void onCameraOpenedCB(int camId);
-    public abstract void onPictureTakenCB(int camId);
+    public abstract void onPictureTakenCB(int camId, String path);
     public abstract void onCameraClosedCB(int camId);
 
 }

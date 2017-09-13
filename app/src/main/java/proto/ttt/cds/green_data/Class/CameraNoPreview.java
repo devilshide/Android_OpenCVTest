@@ -38,6 +38,7 @@ public class CameraNoPreview {
     private ArrayList<ICameraCallback> listeners = new ArrayList<>();
     private static CameraNoPreview mCameraNoPreview;
     private String mCaller;
+    private String mFilePath;
 
     private CameraNoPreview() {
         if (CAMERA_NUM < 1) {
@@ -68,6 +69,7 @@ public class CameraNoPreview {
             if (mCam != null) {
                 mCam.stopPreview();
                 mCam.release();
+                mCam = null;
             }
             mCam = Camera.open(index);
             if (mCam != null) {
@@ -117,6 +119,7 @@ public class CameraNoPreview {
     }
 
     public void takePicture(@NonNull String name) {
+        Log.d(TAG, "takePicture(): name = " + name);
         if (mStoragePath == null) {
             mStoragePath = DEFAULT_STORAGE_DIR.getAbsolutePath();
         }
@@ -142,19 +145,21 @@ public class CameraNoPreview {
     }
 
     private Camera.PictureCallback getJpegCallback(String path) {
-        final String filePath = path;
+        mFilePath = path;
         final int camIndex = mOpenCamIndex;
         Camera.PictureCallback jpeg = new Camera.PictureCallback() {
             @Override
             public void onPictureTaken(byte[] bytes, Camera camera) {
-                mCam.startPreview();
                 try {
-                    FileOutputStream foStream = new FileOutputStream(new File(filePath));
+                    FileOutputStream foStream = new FileOutputStream(new File(mFilePath));
                     foStream.write(bytes);
                     foStream.close();
-                    if (DEBUG) Log.d(TAG, "onPictureTaken(): files saved, path = " + filePath
+                    if (DEBUG) Log.d(TAG, "onPictureTaken(): files saved, path = " + mFilePath
                             + ", openedCamIndex = " + camIndex + ", caller = " + mCaller);
-                    mH.obtainMessage(H.NOTIFY_PICTURE_TAKEN, camIndex).sendToTarget();
+                    Message msg = mH.obtainMessage(H.NOTIFY_PICTURE_TAKEN);
+                    msg.obj = mFilePath;
+                    msg.arg1 = camIndex;
+                    msg.sendToTarget();
                 } catch (IOException e) {
                     e.printStackTrace();
                     if (DEBUG) Log.d(TAG, "onPictureTaken(): IOException, caller = " + mCaller);
@@ -179,7 +184,7 @@ public class CameraNoPreview {
     public interface ICameraCallback {
         void onFailedToAccessOpenedCamera(int camIndex);
         void onCameraOpened(int camIndex);
-        void onPictureTaken(int camIndex);
+        void onPictureTaken(int camIndex, String picturePath);
         void onCameraClosed(int camIndex);
     }
 
@@ -209,10 +214,11 @@ public class CameraNoPreview {
                     break;
                 }
                 case NOTIFY_PICTURE_TAKEN: {
-                    int camIndex = (int) msg.obj;
+                    String path = (String) msg.obj;
+                    int camIndex = msg.arg1;
                     int size = listeners.size();
                     for (int i = 0; i < size; i++) {
-                        listeners.get(i).onPictureTaken(camIndex);
+                        listeners.get(i).onPictureTaken(camIndex, path);
                     }
                     break;
                 }

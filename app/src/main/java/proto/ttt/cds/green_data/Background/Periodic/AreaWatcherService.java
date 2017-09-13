@@ -1,8 +1,10 @@
 package proto.ttt.cds.green_data.Background.Periodic;
 
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Rect;
 import android.os.Bundle;
@@ -13,13 +15,13 @@ import android.util.Log;
 import org.opencv.core.Scalar;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Map;
 import java.util.Set;
 
 import proto.ttt.cds.green_data.Class.ImageProcessor;
 import proto.ttt.cds.green_data.Database.PlantData;
-import proto.ttt.cds.green_data.Class.SequencePictureTaker;
 import proto.ttt.cds.green_data.Database.PlantDBHandler;
 
 /**
@@ -32,7 +34,7 @@ public class AreaWatcherService extends Service {
 
     private static final boolean DEBUG = true;
     public static final String TAG = "AreaWatcherService";
-    public static final int[] CAMERAS = new int[]{0, 1};
+    public static final ArrayList<Integer> CAMERAS = new ArrayList<>(Arrays.asList(0, 1));
 
     // DB  Access
     private static final String FILE_NAME = TAG;
@@ -62,7 +64,7 @@ public class AreaWatcherService extends Service {
     private Scalar mGreen_low = new Scalar(25, 50, 50);
     private Scalar mGreen_upper = new Scalar(80, 255, 255);
 
-    private SequencePictureTaker mPictureTaker;
+    private int mResultForCameras = 0x0;  // Flag to check whether all the results for each camera elements has been returned
 
     @Override
     public void onCreate() {
@@ -73,7 +75,6 @@ public class AreaWatcherService extends Service {
         mImageProcessor = new ImageProcessor();
         mDB = new PlantDBHandler(mContext);
 
-        createSequencePictureTakerIfNeeded();
         loadPlantNames(mContext, mPlantsName);
     }
 
@@ -81,15 +82,37 @@ public class AreaWatcherService extends Service {
     public void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "onDestroy()");
-        if (mPictureTaker != null) {
-            mPictureTaker.stop();
+
+        if (mAreaReceiver != null) {
+            unregisterReceiver(mAreaReceiver);
         }
+    }
+
+    private void initResultForCameras() {
+        mResultForCameras = 0x0;
+        for (int i=0; i<CAMERAS.size(); i++) {
+            mResultForCameras |= (CAMERAS.get(i) + 1);
+        }
+    }
+
+    private void sendBroadcast() {
+        Log.d(TAG, "sendBroadcast()");
+        Intent intent = new Intent(PictureTakerService.InfoReceiver.REQUEST_INFO);
+        Bundle bundle = new Bundle();
+        bundle.putString(PictureTakerService.REQUEST_CODE, AreaReceiver.REQUEST_CODE_AREA);
+        bundle.putString(PictureTakerService.FILE_NAME, this.FILE_NAME);
+//        bundle.putInt(PictureTakerService.CAM_ID, 0);
+        bundle.putIntegerArrayList(PictureTakerService.CAM_ID, CAMERAS);
+        intent.putExtras(bundle);
+        sendBroadcast(intent);
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "onStartCommand()");
         mIntent = intent;
+        registerReceiver();
+
         if (mIntent != null) {
             new Thread(new Runnable() {
                 @Override
@@ -122,8 +145,8 @@ public class AreaWatcherService extends Service {
                         mNumOfPlants = mSubAreaRect.length * mSubAreaRect[0].length;
                     }
 
-                    mPictureTaker.initCallbacks();
-                    mPictureTaker.takePictureStart();
+                    initResultForCameras();
+                    sendBroadcast();
                 }
             }).start();
             return Service.START_STICKY;
@@ -131,74 +154,58 @@ public class AreaWatcherService extends Service {
         return Service.START_REDELIVER_INTENT;
     }
 
-    private void createSequencePictureTakerIfNeeded() {
-        if (mPictureTaker == null) {
-            mPictureTaker = new SequencePictureTaker(mContext, FILE_NAME, CAMERAS, TAG) {
-                @Override
-                public void onFailedToAccessOpenedCameraCB(int camId) {
+    private void processImage(int camId, String path) {
+        Log.d(TAG, "processImage(), camId = " + camId + ", path = " + path);
+        mResultForCameras = mResultForCameras & ~(camId + 1);
+
+        final int camIndex = camId;
+        final String filePath = path;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                double[][] contours = mImageProcessor.
+                        getBiggestContoursFromImg(filePath, mSubAreaRect[camIndex],
+                                mPreviewRect[camIndex], mNumOfContours, new Scalar[]{mGreen_low, mGreen_upper});
+
+                if (contours == null) {
+                    return;
                 }
 
-                @Override
-                public void onCameraOpenedCB(int camId) {
+                if (DEBUG) {
+                    for (int i = 0; i < contours.length; i++) {
+                        for (int j = 0; j < contours[0].length; j++) {
+                            Log.d(TAG, "onPictureTaken(): contour[" + i + "][" + j + "] = "
+                                    + contours[i][j] + ", filePath = " + filePath);
+                        }
+                    }
                 }
 
-                @Override
-                public void onPictureTakenCB(int camId) {
-                    final int camIndex = camId;
-                    new Thread(new Runnable() {
-                        @Override
-                        public void run() {
-                            double[][] contours = mImageProcessor.
-                                    getBiggestContoursFromImg(getPicturePath(camIndex),
-                                            mSubAreaRect[camIndex], mPreviewRect[camIndex],
-                                            mNumOfContours, new Scalar[]{mGreen_low, mGreen_upper});
-
-                            if (contours == null) {
-                                return;
-                            }
-
-                            if (DEBUG) {
-                                for (int i = 0; i < contours.length; i++) {
-                                    for (int j = 0; j < contours[0].length; j++) {
-                                        Log.d(TAG, "onPictureTaken(): contour[" + i + "][" + j + "] = "
-                                                + contours[i][j] + ", caller = " + mPictureTaker.getCaller());
-                                    }
-                                }
-                            }
-
-                            // Get the # number of the biggest contours in each sub section
-                            synchronized (this) {
-                                long currentTime = getCurrentTime();
-                                int smallestContourIndex = mNumOfContours - 1;
-                                int subAreaCnt = contours[0].length;
-                                for (int order = BIGGEST_CONTOUR_INDEX; order <= smallestContourIndex; order++) {
-                                    for (int loc = 0; loc < subAreaCnt; loc++) {
-                                        int realLoc = (camIndex * subAreaCnt) + loc;
-                                        String name = getPlant(realLoc);
-                                        if (name != null) {
-                                            double areaSize = contours[order][loc];
-                                            PlantData plant = new PlantData(realLoc, name, order,
-                                                    areaSize, currentTime);
-                                            mDB.insertData(plant);
-                                        }
-                                    }
-                                }
-                            }
-
-                            printLogPlantData();
-                            if (camIndex == CAMERAS[CAMERAS.length - 1]) {
-                                Log.d(TAG, "onPictureTaken(): Stopping, caller = " + mPictureTaker.getCaller());
-                                stopSelf();
+                // Get the # number of the biggest contours in each sub section
+                synchronized (this) {
+                    long currentTime = getCurrentTime();
+                    int smallestContourIndex = mNumOfContours - 1;
+                    int subAreaCnt = contours[0].length;
+                    for (int order = BIGGEST_CONTOUR_INDEX; order <= smallestContourIndex; order++) {
+                        for (int loc = 0; loc < subAreaCnt; loc++) {
+                            int realLoc = (camIndex * subAreaCnt) + loc;
+                            String name = getPlant(realLoc);
+                            if (name != null) {
+                                double areaSize = contours[order][loc];
+                                PlantData plant = new PlantData(realLoc, name, order,
+                                        areaSize, currentTime);
+                                mDB.insertData(plant);
                             }
                         }
-                    }).start();
+                    }
                 }
 
-                @Override
-                public void onCameraClosedCB(int camId) {
+                printLogPlantData();
+                if (mResultForCameras == 0) {
+                    Log.d(TAG, "onPictureTaken(): Stopping, filePath = " + filePath);
+                    stopSelf();
                 }
-            };
-        }
+            }
+        }).start();
     }
 
     @Override
@@ -288,4 +295,26 @@ public class AreaWatcherService extends Service {
         Log.d(TAG, "resetPlantNames(): Clear SharedPreferences (dataName: " + SHARED_PREF_PLANT + ")");
     }
 
+
+
+
+    AreaReceiver mAreaReceiver;
+    private void registerReceiver(){
+        mAreaReceiver = new AreaReceiver();
+        IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(AreaReceiver.REQUEST_CODE_AREA);
+        registerReceiver(mAreaReceiver, intentFilter);
+    }
+
+    public class AreaReceiver extends BroadcastReceiver {
+        static final String REQUEST_CODE_AREA = "requestArea";
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Log.d(TAG, "onReceive()");
+            int camId = intent.getIntExtra(PictureTakerService.CAM_ID, -1);
+            String picPath = intent.getStringExtra(PictureTakerService.STORAGE_PATH);
+
+            processImage(camId, picPath);
+        }
+    }
 }

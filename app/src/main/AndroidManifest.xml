@@ -27,6 +27,9 @@
         <service
             android:name=".Background.Periodic.YellowWatcherService"
             android:exported="false" />
+        <service
+            android:name=".Background.Periodic.PictureTakerService"
+            android:exported="false" />
 
         <receiver
             android:name=".Receivers.MyAlarmReceiver"
@@ -34,16 +37,18 @@
         <receiver
             android:name=".Activity.BaseActivity$YellowReceiver"
             android:process=":remote" />
+        <receiver
+            android:name=".Background.Periodic.AreaWatcherService$AreaReceiver"
+            android:process=":remote" />
+        <receiver
+            android:name=".Background.Periodic.YellowWatcherService$YellowReceiver"
+            android:process=":remote" />
 
         <activity
             android:name=".Activity.BaseActivity"
             android:label="@string/title_activity_base"
             android:theme="@style/AppTheme.NoActionBar" />
 
-        <service
-            android:name=".Background.Periodic.PictureTakerService"
-            android:enabled="true"
-            android:exported="true"></service>
     </application>
 
 </manifest>

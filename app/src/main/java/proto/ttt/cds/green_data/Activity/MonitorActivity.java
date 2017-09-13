@@ -26,6 +26,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import proto.ttt.cds.green_data.Background.Periodic.AreaWatcherService;
+import proto.ttt.cds.green_data.Background.Periodic.PictureTakerService;
 import proto.ttt.cds.green_data.Receivers.MyAlarmReceiver;
 import proto.ttt.cds.green_data.Class.SequencePictureTaker;
 import proto.ttt.cds.green_data.Database.PlantDBHandler;
@@ -37,8 +38,11 @@ public class MonitorActivity extends AppCompatActivity {
 
     public static final String TAG = "MonitorActivity";
 
-    private static final long FREQUECY_WATCH_AREA = 1000 * 60;
-    private static final long FREQUECY_WATCH_YELLOW = 1000 * 60 * 60;
+    private static final long FREQUENCY_ONE_HOUR = 1000 * 60 * 60;
+//    private static final long FREQUECY_WATCH_AREA = FREQUENCY_ONE_HOUR * 8;
+//    private static final long FREQUECY_WATCH_YELLOW = FREQUENCY_ONE_HOUR * 12;
+private static final long FREQUECY_WATCH_AREA = 1000 * 60;
+    private static final long FREQUECY_WATCH_YELLOW = 1000 * 60 * 2;
 
     public static final int PLANTS_NUM = 6;
     public static final int PREVIEW_NUM = 2;
@@ -56,6 +60,7 @@ public class MonitorActivity extends AppCompatActivity {
 
     private int mCurOrientation;
     private PendingIntent mPlantWatcherPendingIntent, mYellowWatcherPendingIntent;
+    private Intent mPictureTakerIntent;
 
     private ImageView[] mPrevImageView = new ImageView[PREVIEW_NUM];
     private Rect[] mPrevRect = new Rect[PREVIEW_NUM];
@@ -98,8 +103,8 @@ public class MonitorActivity extends AppCompatActivity {
             public void onCameraOpenedCB(int camId) {}
 
             @Override
-            public void onPictureTakenCB(int camId) {
-                String path = this.getPicturePath(camId);
+            public void onPictureTakenCB(int camId, String path) {
+//                String path = this.getPicturePath(camId);
                 Drawable d = Drawable.createFromPath(path);
 
                 if (d != null && mPrevImageView[camId] != null && mPrevRect[camId] != null) {
@@ -214,10 +219,12 @@ public class MonitorActivity extends AppCompatActivity {
             mBtn_startService.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
+                    mPictureTakerIntent = new Intent(MonitorActivity.this, PictureTakerService.class);
+                    startService(mPictureTakerIntent);
                     //schedule service then destroy activity
                     scheduleAlarm();
                     //testing
-                    startActivity(new Intent(MonitorActivity.this, BaseActivity.class));
+//                    startActivity(new Intent(MonitorActivity.this, BaseActivity.class));
 
                     finish();
                 }
@@ -229,6 +236,9 @@ public class MonitorActivity extends AppCompatActivity {
             mBtn_stopService.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
+                    if (mPictureTakerIntent != null) {
+                        stopService(mPictureTakerIntent);
+                    }
                     stopScheduleAlarm();
                     Toast.makeText(getApplicationContext(), "Alarm service stopped", Toast.LENGTH_LONG).show();
                 }
@@ -280,7 +290,7 @@ public class MonitorActivity extends AppCompatActivity {
 
         createYellowWatcherIntentIfNeeded();
         alarmManager.cancel(mYellowWatcherPendingIntent);
-        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 1000,
+        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 5000,
                 FREQUECY_WATCH_YELLOW, mYellowWatcherPendingIntent);
 
     }
