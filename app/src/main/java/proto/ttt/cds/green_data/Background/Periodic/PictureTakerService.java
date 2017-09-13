@@ -130,7 +130,7 @@ public class PictureTakerService extends Service implements CameraNoPreview.ICam
                 if (DEBUG) Log.d(TAG, "takeNextPictureIfNeeded(): (ALL CAMS READY) NO ACTION TAKEN");
             }
         } else {
-            if (DEBUG) Log.d(TAG, "takeNextPictureIfNeeded() ALL CAMS NOT READY! KEEP IN PENDING, camId = "
+            if (DEBUG) Log.d(TAG, "takeNextPictureIfNeeded() CAMS NOT READY! KEEP IN PENDING, camId = "
                     + mCurrCameraId);
         }
     }
@@ -239,8 +239,6 @@ public class PictureTakerService extends Service implements CameraNoPreview.ICam
             if (bundle != null) {
                 String requestCode = bundle.getString(REQUEST_CODE);
                 String fileName = bundle.getString(FILE_NAME);
-//                int camId = bundle.getInt(CAM_ID);
-//                mCamPendingList.add(new CamAction(requestCode, fileName, camId));
                 ArrayList<Integer> camList = bundle.getIntegerArrayList(CAM_ID);
                 for (int i=0; i<camList.size(); i++) {
                     mCamPendingList.add(new CamAction(requestCode, fileName, camList.get(i)));

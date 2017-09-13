@@ -101,7 +101,6 @@ public class AreaWatcherService extends Service {
         Bundle bundle = new Bundle();
         bundle.putString(PictureTakerService.REQUEST_CODE, AreaReceiver.REQUEST_CODE_AREA);
         bundle.putString(PictureTakerService.FILE_NAME, this.FILE_NAME);
-//        bundle.putInt(PictureTakerService.CAM_ID, 0);
         bundle.putIntegerArrayList(PictureTakerService.CAM_ID, CAMERAS);
         intent.putExtras(bundle);
         sendBroadcast(intent);

@@ -98,7 +98,6 @@ public class YellowWatcherService extends Service {
         Bundle bundle = new Bundle();
         bundle.putString(PictureTakerService.REQUEST_CODE, YellowReceiver.REQUEST_CODE_YELLOW);
         bundle.putString(PictureTakerService.FILE_NAME, this.FILE_NAME);
-//        bundle.putInt(PictureTakerService.CAM_ID, 0);
         bundle.putIntegerArrayList(PictureTakerService.CAM_ID, CAMERAS);
         intent.putExtras(bundle);
         sendBroadcast(intent);
@@ -212,7 +211,7 @@ public class YellowWatcherService extends Service {
                     for (int i = 0; i < mYellowedArea.length; i++) {
                         for (int j = 0; j < mYellowedArea[0].length; j++) {
                             Log.d(TAG, "onPictureTaken(): yellowedArea[" + i + "][" + j + "] = "
-                                    + mYellowedArea[i][j] + ", caller = " + TAG);
+                                    + mYellowedArea[i][j] + ", path = " + picturePath);
                         }
                     }
                 }

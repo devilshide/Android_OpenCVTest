@@ -80,9 +80,6 @@ public class ImageProcessor {
         Imgproc.cvtColor(mRGB, mTempMat, Imgproc.COLOR_RGB2HSV);
 
         Mat masked = new Mat();
-//        Scalar green_l = new Scalar(30, 50, 50);
-//        Scalar green_u = new Scalar(90, 255, 255);
-
         Core.inRange(mTempMat, colorRange[0], colorRange[1], masked);
         Imgproc.dilate(masked, masked, Imgproc.getStructuringElement(Imgproc.MORPH_DILATE, new Size(15,15)));
 
