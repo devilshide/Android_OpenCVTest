@@ -124,7 +124,7 @@ public class CameraNoPreview {
             mStoragePath = DEFAULT_STORAGE_DIR.getAbsolutePath();
         }
 
-        final String filePath = mStoragePath + "/" + name;
+        final String filePath = mStoragePath + "/" + name + ".jpeg";
         new Thread(new Runnable() {
             @Override
             public void run() {
