@@ -119,7 +119,6 @@ public class CameraNoPreview {
     }
 
     public void takePicture(@NonNull String name) {
-        Log.d(TAG, "takePicture(): name = " + name);
         if (mStoragePath == null) {
             mStoragePath = DEFAULT_STORAGE_DIR.getAbsolutePath();
         }

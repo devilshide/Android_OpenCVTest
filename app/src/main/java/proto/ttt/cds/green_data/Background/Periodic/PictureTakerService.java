@@ -51,7 +51,7 @@ public class PictureTakerService extends Service implements CameraNoPreview.ICam
         public void run() {
             if (mShouldRetakePicture) {
                 Log.d(TAG, "mTimeoutRunnable(): TIMED OUT, retaking picture, CAM_ID = " +
-                        mCurrCameraId + ", caller = " + mCaller);
+                        mCurrCameraId + ", caller = " + mCaller + ", pending size = " + mCamPendingList.size());
                 mCamPendingList.add(mCurrCamAction);
             }
         }
@@ -112,6 +112,9 @@ public class PictureTakerService extends Service implements CameraNoPreview.ICam
         mCurrCamAction = mCamPendingList.poll();
         boolean hasNext = mCurrCamAction != null;
         if (hasNext) {
+            if (DEBUG) Log.d(TAG, "getNextActionIfExists(): Next Action: mCurrKey = " + mCurrKey +
+                    ", mCurrCameraId = " + mCurrCameraId + ", mPicName = " + mPicName +
+                    ", pending size = " + mCamPendingList.size());
             mCurrKey = mCurrCamAction.requestCode;
             mCurrCameraId = mCurrCamAction.camId;
             mPicName = mCurrCamAction.picName;
@@ -245,7 +248,7 @@ public class PictureTakerService extends Service implements CameraNoPreview.ICam
                 }
 
                 Log.d(TAG, "onReceive() requestCode = " + requestCode + ", fileName = " + fileName
-                        + ", camList = " + camList);
+                        + ", camList = " + camList + ", pending size = " + mCamPendingList.size());
                 takeNextPictureIfNeeded();
             }
 
