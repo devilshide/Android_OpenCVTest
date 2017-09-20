@@ -74,15 +74,15 @@ public class CameraNoPreview {
             mCam = Camera.open(index);
             if (mCam != null) {
                 updateCameraStatus(index, true);
-                Log.d(TAG, "openCamera(): CAMERA# " + index + " opened, Caller = " + caller);
+                Log.d(TAG, "openCamera(): CAMERA# " + index + " opened, Caller = " + caller + ", CAMERA_NUM = " + CAMERA_NUM);
                 return true;
             } else {
-                Log.d(TAG, "openCamera(): CAMERA# " + index + " is NULL");
+                Log.d(TAG, "openCamera(): CAMERA# " + index + " is NULL" + ", CAMERA_NUM = " + CAMERA_NUM);
                 return false;
             }
         } catch (RuntimeException e) {
             Log.e(TAG, "openCamera(): Camera failed to open: " + e.getLocalizedMessage() +
-                    ", Caller = " + caller);
+                    ", Caller = " + caller + ", CAMERA_NUM = " + CAMERA_NUM);
             mH.obtainMessage(H.NOTIFY_CAMERA_ALREADY_IN_USE, index).sendToTarget();
             return false;
         }
@@ -101,9 +101,9 @@ public class CameraNoPreview {
     }
 
     private void updateCameraStatus(int camId, boolean isOpened) {
-        if (camId < 0 || camId >= CAMERA_NUM) {
-            return;
-        }
+//        if (camId < 0 || camId >= CAMERA_NUM) {
+//            return;
+//        }
 
         if (isOpened) {
             mOpenCamIndex = camId;

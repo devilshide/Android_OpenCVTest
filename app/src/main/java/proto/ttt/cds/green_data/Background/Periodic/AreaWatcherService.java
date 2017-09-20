@@ -34,7 +34,7 @@ public class AreaWatcherService extends Service {
 
     private static final boolean DEBUG = true;
     public static final String TAG = "AreaWatcherService";
-    public static final ArrayList<Integer> CAMERAS = new ArrayList<>(Arrays.asList(0, 1));
+    public static final ArrayList<Integer> CAMERAS = new ArrayList<>(Arrays.asList(0,1));
 
     // DB  Access
     private static final String FILE_NAME = TAG;

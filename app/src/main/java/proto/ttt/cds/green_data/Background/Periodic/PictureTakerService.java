@@ -32,6 +32,7 @@ public class PictureTakerService extends Service implements CameraNoPreview.ICam
     public static final String STORAGE_PATH = "storagePath";
 
     public static final int CAMERA_NUM = Camera.getNumberOfCameras();
+//public static final int CAMERA_NUM = 3;
     private static final long TIMEOUT_MS = 5 * 1000;
 
     private String mPicName;
@@ -130,7 +131,7 @@ public class PictureTakerService extends Service implements CameraNoPreview.ICam
                 if (DEBUG) Log.d(TAG, "takeNextPictureIfNeeded(): (ALL CAMS READY) TAKING NEXT PICTURE");
                 takePicture();
             } else {
-                if (DEBUG) Log.d(TAG, "takeNextPictureIfNeeded(): (ALL CAMS READY) NO ACTION TAKEN");
+                if (DEBUG) Log.d(TAG, "takeNextPictureIfNeeded(): (ALL CAMS READY) EMPTY-NO ACTION TAKEN");
             }
         } else {
             if (DEBUG) Log.d(TAG, "takeNextPictureIfNeeded() CAMS NOT READY! KEEP IN PENDING, camId = "
@@ -144,7 +145,14 @@ public class PictureTakerService extends Service implements CameraNoPreview.ICam
             mCamNoPreview.takePicture(mPicName + mCurrCameraId);
             mShouldRetakePicture = true;
             mCanTakePicture = false;
-            mH.postDelayed(mTimeoutRunnable, TIMEOUT_MS);
+//            mH.postDelayed(mTimeoutRunnable, TIMEOUT_MS);
+        } else {
+            if (DEBUG) {
+                if (mCamNoPreview == null)
+                    Log.d(TAG, "takePicture() NOT TAKING PIC: mCamNoPreview IS NULL");
+                if (!(mCurrCameraId >= 0 && mCurrCameraId < CAMERA_NUM))
+                    Log.d(TAG, "takePicture() NOT TAKING PIC: mCurrCameraId = " + mCurrCameraId + ", CAMERA_NUM = " + CAMERA_NUM);
+            }
         }
     }
 
@@ -250,8 +258,9 @@ public class PictureTakerService extends Service implements CameraNoPreview.ICam
                 Log.d(TAG, "onReceive() requestCode = " + requestCode + ", fileName = " + fileName
                         + ", camList = " + camList + ", pending size = " + mCamPendingList.size());
                 takeNextPictureIfNeeded();
+            } else {
+                Log.d(TAG, "onReceive() No bundle");
             }
-
         }
     }
 }

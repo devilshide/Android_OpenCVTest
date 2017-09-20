@@ -32,7 +32,7 @@ public class YellowWatcherService extends Service {
     public static final long YELLOW_SIZE_THRESHOLD = 100000;
 
 //    public static final int[] CAMERAS = new int[]{1};
-    public static final ArrayList<Integer> CAMERAS = new ArrayList<>(Arrays.asList(0));
+    public static final ArrayList<Integer> CAMERAS = new ArrayList<>(Arrays.asList(2));
     // DB  Access
     private static final String FILE_NAME = TAG;
     public static final String SHARED_PREF_PLANT = "plantsName";
